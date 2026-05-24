@@ -1,0 +1,18 @@
+namespace NipNip.Modules.Merchants.DTOs;
+
+public record MerchantResponse(
+    Guid Id,
+    string Name,
+    string Slug,
+    string? LogoUrl,
+    string? WebsiteUrl,
+    string? InstagramHandle,
+    string? Description,
+    decimal CommissionPercent,
+    decimal Balance,
+    string ApiKey,
+    string? NotificationEmail,
+    bool IsActive,
+    bool IsHighlighted,
+    DateTimeOffset CreatedAt
+);

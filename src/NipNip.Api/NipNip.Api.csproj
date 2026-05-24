@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.24" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NipNip.Shared\NipNip.Shared.csproj" />
+    <ProjectReference Include="..\NipNip.Data\NipNip.Data.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Merchants\NipNip.Modules.Merchants.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Creators\NipNip.Modules.Creators.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Tracking\NipNip.Modules.Tracking.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Payouts\NipNip.Modules.Payouts.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Codes\NipNip.Modules.Codes.csproj" />
+  </ItemGroup>
+
+</Project>

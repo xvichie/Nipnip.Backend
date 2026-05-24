@@ -1,0 +1,6 @@
+@NipNip.Api_HostAddress = http://localhost:5058
+
+GET {{NipNip.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

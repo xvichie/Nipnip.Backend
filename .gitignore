@@ -1,0 +1,62 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.assets.json
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vcxproj.filters
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Publish profiles
+**/Properties/PublishProfiles/
+**/publish/
+
+# Entity Framework migrations snapshot backup
+# (keep Migrations/ but ignore designer files if any)
+
+# Secrets and environment
+appsettings.Local.json
+appsettings.*.Local.json
+*.env
+.env
+.env.*
+secrets.json
+**/secrets.json
+
+# Logs
+logs/
+*.log
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
