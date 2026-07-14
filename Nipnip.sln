@@ -1,6 +1,5 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# 
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BB20363B-B6A7-475C-AF52-76656C383105}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NipNip.Api", "src\NipNip.Api\NipNip.Api.csproj", "{52FE8C87-0CDD-45FA-A082-29EA88E508F8}"
@@ -18,6 +17,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NipNip.Modules.Payouts", "src\NipNip.Modules.Payouts\NipNip.Modules.Payouts.csproj", "{B93E8E5C-5C25-41AA-A805-21462B66E603}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NipNip.Modules.Codes", "src\NipNip.Modules.Codes\NipNip.Modules.Codes.csproj", "{94D6E5F8-6F62-4172-AEB2-7C86E0E4A6AF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NipNip.Modules.Storefronts", "src\NipNip.Modules.Storefronts\NipNip.Modules.Storefronts.csproj", "{87D51D73-C784-44A3-B5FF-4BD0300E07F3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -125,6 +126,21 @@ Global
 		{94D6E5F8-6F62-4172-AEB2-7C86E0E4A6AF}.Release|x64.Build.0 = Release|Any CPU
 		{94D6E5F8-6F62-4172-AEB2-7C86E0E4A6AF}.Release|x86.ActiveCfg = Release|Any CPU
 		{94D6E5F8-6F62-4172-AEB2-7C86E0E4A6AF}.Release|x86.Build.0 = Release|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Debug|x64.Build.0 = Debug|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Debug|x86.Build.0 = Debug|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Release|x64.ActiveCfg = Release|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Release|x64.Build.0 = Release|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Release|x86.ActiveCfg = Release|Any CPU
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{52FE8C87-0CDD-45FA-A082-29EA88E508F8} = {BB20363B-B6A7-475C-AF52-76656C383105}
@@ -135,5 +151,6 @@ Global
 		{4A20848C-C833-4636-9424-13E3CB5E4FD4} = {BB20363B-B6A7-475C-AF52-76656C383105}
 		{B93E8E5C-5C25-41AA-A805-21462B66E603} = {BB20363B-B6A7-475C-AF52-76656C383105}
 		{94D6E5F8-6F62-4172-AEB2-7C86E0E4A6AF} = {BB20363B-B6A7-475C-AF52-76656C383105}
+		{87D51D73-C784-44A3-B5FF-4BD0300E07F3} = {BB20363B-B6A7-475C-AF52-76656C383105}
 	EndGlobalSection
 EndGlobal

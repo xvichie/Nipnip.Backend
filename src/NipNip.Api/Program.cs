@@ -11,6 +11,7 @@ using NipNip.Modules.Codes.Extensions;
 using NipNip.Modules.Creators.Extensions;
 using NipNip.Modules.Merchants.Extensions;
 using NipNip.Modules.Payouts.Extensions;
+using NipNip.Modules.Storefronts.Extensions;
 using NipNip.Modules.Tracking.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(NipNip.Modules.Creators.CreatorController).Assembly)
     .AddApplicationPart(typeof(NipNip.Modules.Tracking.RedirectController).Assembly)
     .AddApplicationPart(typeof(NipNip.Modules.Payouts.PayoutController).Assembly)
+    .AddApplicationPart(typeof(NipNip.Modules.Storefronts.StoreController).Assembly)
     .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -37,6 +39,7 @@ builder.Services.AddMerchantModule();
 builder.Services.AddCreatorModule();
 builder.Services.AddTrackingModule();
 builder.Services.AddPayoutModule();
+builder.Services.AddStorefrontModule();
 
 var frontendOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
 

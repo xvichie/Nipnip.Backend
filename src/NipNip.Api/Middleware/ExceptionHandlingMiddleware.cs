@@ -3,7 +3,7 @@ using NipNip.Shared.Exceptions;
 
 namespace NipNip.Api.Middleware;
 
-public class ExceptionHandlingMiddleware(RequestDelegate next)
+public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger, IHostEnvironment env)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -17,7 +17,7 @@ public class ExceptionHandlingMiddleware(RequestDelegate next)
         }
     }
 
-    private static Task HandleAsync(HttpContext context, Exception exception)
+    private Task HandleAsync(HttpContext context, Exception exception)
     {
         var (status, title) = exception switch
         {
@@ -29,11 +29,16 @@ public class ExceptionHandlingMiddleware(RequestDelegate next)
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error"),
         };
 
+        if (status == StatusCodes.Status500InternalServerError)
+            logger.LogError(exception, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
+
         var problem = new ProblemDetails
         {
             Status = status,
             Title = title,
-            Detail = exception.Message,
+            Detail = status == StatusCodes.Status500InternalServerError && env.IsDevelopment()
+                ? exception.ToString()
+                : exception.Message,
         };
 
         context.Response.StatusCode = status;

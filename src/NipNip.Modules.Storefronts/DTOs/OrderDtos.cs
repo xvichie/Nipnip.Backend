@@ -1,0 +1,51 @@
+namespace NipNip.Modules.Storefronts.DTOs;
+
+public record OrderItemResponse(
+    Guid Id,
+    Guid VariantId,
+    string ProductName,
+    string Sku,
+    string? ImageUrl,
+    List<CartItemOptionResponse> Options,
+    int Quantity,
+    decimal PriceAtPurchase
+);
+
+public record OrderNoteResponse(Guid Id, string Content, DateTimeOffset CreatedAt);
+
+public record OrderDetailResponse(
+    Guid Id,
+    string CustomerName,
+    string Email,
+    string Phone,
+    string Address,
+    double? Latitude,
+    double? Longitude,
+    string PaymentMethod,
+    string Status,
+    decimal Total,
+    decimal ShippingFee,
+    string? ShippingZoneName,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? PaymentConfirmedAt,
+    List<OrderItemResponse> Items,
+    List<OrderNoteResponse> Notes
+);
+
+public record UpdateOrderStatusRequest(string Status);
+
+public record CreateOrderNoteRequest(string Content);
+
+public record UpdatePaymentConfirmedRequest(bool Confirmed);
+
+public record NewOrderCountResponse(int Count);
+
+public record MonthlyOrderSummary(
+    int Year,
+    int Month,
+    decimal Revenue,
+    int OrderCount,
+    int ProductsSold,
+    decimal AverageOrderValue,
+    decimal AverageItemPrice
+);

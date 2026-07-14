@@ -8,6 +8,8 @@ using NipNip.Modules.Merchants.DTOs;
 using NipNip.Modules.Merchants.Extensions;
 using NipNip.Modules.Payouts;
 using NipNip.Modules.Payouts.DTOs;
+using NipNip.Modules.Storefronts;
+using NipNip.Modules.Storefronts.DTOs;
 using NipNip.Modules.Tracking;
 using NipNip.Modules.Tracking.DTOs;
 using NipNip.Shared.Exceptions;
@@ -22,6 +24,7 @@ public class AdminController(
     CreatorService creatorService,
     TrackingService trackingService,
     PayoutService payoutService,
+    StoreService storeService,
     AppDbContext db) : ControllerBase
 {
     // --- Stats ---
@@ -151,6 +154,19 @@ public class AdminController(
     public async Task<ActionResult<MerchantResponse>> ToggleMerchantHighlight(Guid id)
     {
         return Ok(await merchantService.ToggleHighlightAsync(id));
+    }
+
+    [HttpGet("merchants/{merchantId:guid}/store")]
+    public async Task<ActionResult<StoreResponse?>> GetMerchantStore(Guid merchantId)
+    {
+        return Ok(await storeService.GetByMerchantIdAdminAsync(merchantId));
+    }
+
+    [HttpPost("merchants/{merchantId:guid}/store")]
+    public async Task<ActionResult<StoreResponse>> CreateMerchantStore(
+        Guid merchantId, [FromBody] CreateStoreRequest request)
+    {
+        return Ok(await storeService.CreateAdminAsync(merchantId, request));
     }
 
     // --- Creators ---

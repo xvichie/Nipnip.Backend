@@ -20,6 +20,7 @@
     <ProjectReference Include="..\NipNip.Modules.Tracking\NipNip.Modules.Tracking.csproj" />
     <ProjectReference Include="..\NipNip.Modules.Payouts\NipNip.Modules.Payouts.csproj" />
     <ProjectReference Include="..\NipNip.Modules.Codes\NipNip.Modules.Codes.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Storefronts\NipNip.Modules.Storefronts.csproj" />
   </ItemGroup>
 
 </Project>
