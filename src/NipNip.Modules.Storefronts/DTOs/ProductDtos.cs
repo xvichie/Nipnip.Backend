@@ -29,3 +29,5 @@ public record ProductDetailResponse(
 public record CreateProductRequest(string Name, string? Description, decimal BasePrice, decimal? SalePrice, Guid? CategoryId);
 
 public record UpdateProductRequest(string? Name, string? Description, decimal? BasePrice, decimal? SalePrice, Guid? CategoryId, bool? IsActive);
+
+public record ProductPriceRangeResponse(decimal Min, decimal Max);

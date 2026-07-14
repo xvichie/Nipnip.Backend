@@ -48,7 +48,15 @@ public class ProductService(AppDbContext db, StoreService storeService)
         return result.Map(p => p.ToSummaryDto());
     }
 
-    public async Task<List<ProductSummaryResponse>> GetAllForStoreSlugAsync(string slug, string? categorySlug)
+    public async Task<PaginatedResult<ProductSummaryResponse>> GetAllForStoreSlugAsync(
+        string slug,
+        PaginatedRequest pagination,
+        string? categorySlug = null,
+        string? search = null,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
+        string? sortBy = null,
+        string? sortDir = null)
     {
         var store = await db.Stores.FirstOrDefaultAsync(s => s.Slug == slug && s.IsActive)
             ?? throw new NotFoundException($"Store '{slug}' not found.");
@@ -70,12 +78,55 @@ public class ProductService(AppDbContext db, StoreService storeService)
             }
             else
             {
-                return [];
+                return new PaginatedResult<ProductSummaryResponse>([], 0, pagination.Page, pagination.PageSize, 0);
             }
         }
 
-        var products = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
-        return products.Select(p => p.ToSummaryDto()).ToList();
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+
+        if (minPrice.HasValue)
+            query = query.Where(p => (p.SalePrice ?? p.BasePrice) >= minPrice.Value);
+
+        if (maxPrice.HasValue)
+            query = query.Where(p => (p.SalePrice ?? p.BasePrice) <= maxPrice.Value);
+
+        var descending = !string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
+        query = sortBy?.ToLowerInvariant() switch
+        {
+            "name" => descending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+            "price" => descending
+                ? query.OrderByDescending(p => p.SalePrice ?? p.BasePrice)
+                : query.OrderBy(p => p.SalePrice ?? p.BasePrice),
+            _ => descending ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt),
+        };
+
+        var result = await query.ToPaginatedResultAsync(pagination);
+        return result.Map(p => p.ToSummaryDto());
+    }
+
+    public async Task<ProductPriceRangeResponse> GetPriceRangeForStoreSlugAsync(string slug, string? categorySlug)
+    {
+        var store = await db.Stores.FirstOrDefaultAsync(s => s.Slug == slug && s.IsActive)
+            ?? throw new NotFoundException($"Store '{slug}' not found.");
+
+        var query = db.Products.Where(p => p.StoreId == store.Id && p.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(categorySlug))
+        {
+            var category = await db.Categories.FirstOrDefaultAsync(c => c.StoreId == store.Id && c.Slug == categorySlug);
+            if (category is not null)
+                query = query.Where(p => p.CategoryId == category.Id);
+            else if (categorySlug == "sale")
+                query = query.Where(p => p.SalePrice != null || p.Variants.Any(v => v.SalePrice != null));
+            else
+                return new ProductPriceRangeResponse(0, 0);
+        }
+
+        var prices = await query.Select(p => p.SalePrice ?? p.BasePrice).ToListAsync();
+        if (prices.Count == 0) return new ProductPriceRangeResponse(0, 0);
+
+        return new ProductPriceRangeResponse(Math.Floor(prices.Min()), Math.Ceiling(prices.Max()));
     }
 
     public async Task<ProductDetailResponse> GetBySlugForStoreSlugAsync(string slug, string productSlug)

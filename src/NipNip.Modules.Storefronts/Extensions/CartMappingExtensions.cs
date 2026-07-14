@@ -13,6 +13,7 @@ public static class CartMappingExtensions
                 i.Id,
                 i.VariantId,
                 i.Variant.Product.Name,
+                i.Variant.Product.Slug,
                 i.Variant.Sku,
                 i.Variant.SalePrice ?? i.Variant.Price,
                 i.Quantity,

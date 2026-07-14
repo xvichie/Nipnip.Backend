@@ -24,19 +24,41 @@ public class VercelDomainService(IHttpClientFactory httpClientFactory, IOptions<
         if (!response.IsSuccessStatusCode)
             throw new ArgumentException(ExtractErrorMessage(json) ?? "Failed to connect the domain. Please try again.");
 
-        return ParseStatus(domain, json);
+        // The add-domain response's own "verified" flag only means Vercel doesn't
+        // require an ownership challenge (a TXT record) — it says nothing about
+        // whether DNS actually points here. A brand-new, uncontested domain gets
+        // verified:true immediately, before any DNS has been touched. Only an
+        // ownership challenge (rare — the domain is already claimed elsewhere on
+        // Vercel) is worth reading from this response; real readiness always comes
+        // from the DNS config check below.
+        var challenges = ExtractOwnershipChallenges(json);
+        var configStatus = await CheckDnsConfigAsync(domain);
+        return new VercelDomainStatus(configStatus, challenges ?? DefaultInstructions(domain));
     }
 
     public async Task<VercelDomainStatus> GetStatusAsync(string domain)
     {
+        var verified = await CheckDnsConfigAsync(domain);
+        return new VercelDomainStatus(verified, DefaultInstructions(domain));
+    }
+
+    private async Task<bool> CheckDnsConfigAsync(string domain)
+    {
         var client = CreateClient();
-        var response = await client.GetAsync($"/v9/projects/{_options.ProjectId}/domains/{domain}{TeamQuery("?")}");
+        var response = await client.GetAsync($"/v6/domains/{domain}/config{TeamQuery("?")}");
+        if (!response.IsSuccessStatusCode) return false;
 
-        var json = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
-            return new VercelDomainStatus(false, DefaultInstructions(domain));
-
-        return ParseStatus(domain, json);
+        try
+        {
+            var node = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+            // misconfigured:false means DNS resolves to Vercel and the domain is actually live.
+            var misconfigured = node?["misconfigured"]?.GetValue<bool>() ?? true;
+            return !misconfigured;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public async Task RemoveDomainAsync(string domain)
@@ -59,27 +81,14 @@ public class VercelDomainService(IHttpClientFactory httpClientFactory, IOptions<
     private string TeamQuery(string separator) =>
         string.IsNullOrWhiteSpace(_options.TeamId) ? "" : $"{separator}teamId={_options.TeamId}";
 
-    private static VercelDomainStatus ParseStatus(string domain, string json)
+    private static List<DomainDnsInstruction>? ExtractOwnershipChallenges(string json)
     {
-        JsonNode? node;
         try
         {
-            node = JsonNode.Parse(json);
-        }
-        catch (JsonException)
-        {
-            return new VercelDomainStatus(false, DefaultInstructions(domain));
-        }
+            var node = JsonNode.Parse(json);
+            if (node?["verification"] is not JsonArray array) return null;
 
-        var verified = node?["verified"]?.GetValue<bool>() ?? false;
-
-        // Vercel only returns explicit ownership-verification challenges when the
-        // domain is already claimed elsewhere on Vercel — the common case (a fresh
-        // domain that just needs DNS pointed here) has no challenges, so fall back
-        // to the standard apex/subdomain instructions.
-        var challenges = new List<DomainDnsInstruction>();
-        if (node?["verification"] is JsonArray array)
-        {
+            var challenges = new List<DomainDnsInstruction>();
             foreach (var c in array)
             {
                 var type = c?["type"]?.GetValue<string>();
@@ -88,9 +97,12 @@ public class VercelDomainService(IHttpClientFactory httpClientFactory, IOptions<
                 if (type is not null && name is not null && value is not null)
                     challenges.Add(new DomainDnsInstruction(type, name, value));
             }
+            return challenges.Count > 0 ? challenges : null;
         }
-
-        return new VercelDomainStatus(verified, challenges.Count > 0 ? challenges : DefaultInstructions(domain));
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static List<DomainDnsInstruction> DefaultInstructions(string domain)

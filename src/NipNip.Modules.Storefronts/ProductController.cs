@@ -15,9 +15,25 @@ public class ProductController(ProductService productService) : ControllerBase
     [HttpGet("/api/stores/{slug}/products")]
     [AllowAnonymous]
     [EnableCors("Public")]
-    public async Task<ActionResult<List<ProductSummaryResponse>>> GetAllPublic(string slug, [FromQuery] string? categorySlug)
+    public async Task<ActionResult<PaginatedResult<ProductSummaryResponse>>> GetAllPublic(
+        string slug,
+        [FromQuery] PaginatedRequest pagination,
+        [FromQuery] string? categorySlug,
+        [FromQuery] string? search,
+        [FromQuery] decimal? minPrice,
+        [FromQuery] decimal? maxPrice,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortDir)
     {
-        return Ok(await productService.GetAllForStoreSlugAsync(slug, categorySlug));
+        return Ok(await productService.GetAllForStoreSlugAsync(slug, pagination, categorySlug, search, minPrice, maxPrice, sortBy, sortDir));
+    }
+
+    [HttpGet("/api/stores/{slug}/products/price-range")]
+    [AllowAnonymous]
+    [EnableCors("Public")]
+    public async Task<ActionResult<ProductPriceRangeResponse>> GetPriceRangePublic(string slug, [FromQuery] string? categorySlug)
+    {
+        return Ok(await productService.GetPriceRangeForStoreSlugAsync(slug, categorySlug));
     }
 
     [HttpGet("/api/stores/{slug}/products/{productSlug}")]

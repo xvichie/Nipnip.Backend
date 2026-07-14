@@ -6,6 +6,7 @@ public record CartItemResponse(
     Guid Id,
     Guid VariantId,
     string ProductName,
+    string ProductSlug,
     string Sku,
     decimal Price,
     int Quantity,
