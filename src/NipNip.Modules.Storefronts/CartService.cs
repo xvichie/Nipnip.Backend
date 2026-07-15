@@ -6,12 +6,13 @@ using NipNip.Data.Entities;
 using NipNip.Data.Enums;
 using NipNip.Modules.Storefronts.DTOs;
 using NipNip.Modules.Storefronts.Extensions;
+using NipNip.Modules.Tracking;
 using NipNip.Shared.Email;
 using NipNip.Shared.Exceptions;
 
 namespace NipNip.Modules.Storefronts;
 
-public class CartService(AppDbContext db, IEmailService emailService, ILogger<CartService> logger)
+public class CartService(AppDbContext db, IEmailService emailService, TrackingService trackingService, ILogger<CartService> logger)
 {
     public async Task<CartResponse> GetCartAsync(string slug, string? sessionId)
     {
@@ -153,6 +154,19 @@ public class CartService(AppDbContext db, IEmailService emailService, ILogger<Ca
         db.CartItems.RemoveRange(cart.Items);
 
         await db.SaveChangesAsync();
+
+        if (store is { AffiliateEnabled: true })
+        {
+            try
+            {
+                await trackingService.TrackStorefrontConversionAsync(
+                    store.MerchantId, request.Ref, order.Id.ToString(), order.Total, "GEL");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to record storefront affiliate conversion for order {OrderId}", order.Id);
+            }
+        }
 
         if (store is not null)
         {

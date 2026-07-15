@@ -110,6 +110,7 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
         }
 
         if (request.IsActive.HasValue) store.IsActive = request.IsActive.Value;
+        if (request.AffiliateEnabled.HasValue) store.AffiliateEnabled = request.AffiliateEnabled.Value;
 
         await db.SaveChangesAsync();
         return store.ToDto();

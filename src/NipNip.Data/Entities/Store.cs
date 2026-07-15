@@ -11,6 +11,7 @@ public class Store
     public bool IsActive { get; set; } = true;
     public string? CustomDomain { get; set; }
     public DateTimeOffset? CustomDomainVerifiedAt { get; set; }
+    public bool AffiliateEnabled { get; set; } = false;
     public DateTimeOffset CreatedAt { get; set; }
 
     public Merchant Merchant { get; set; } = null!;

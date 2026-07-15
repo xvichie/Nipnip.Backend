@@ -8,7 +8,8 @@ public record CheckoutRequest(
     double? Latitude,
     double? Longitude,
     string PaymentMethod,
-    string? ShippingZoneId
+    string? ShippingZoneId,
+    string? Ref
 );
 
 public record OrderResponse(

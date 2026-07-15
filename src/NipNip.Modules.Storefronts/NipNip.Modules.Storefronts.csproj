@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\NipNip.Data\NipNip.Data.csproj" />
     <ProjectReference Include="..\NipNip.Shared\NipNip.Shared.csproj" />
+    <ProjectReference Include="..\NipNip.Modules.Tracking\NipNip.Modules.Tracking.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

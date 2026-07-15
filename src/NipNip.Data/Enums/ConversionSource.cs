@@ -5,5 +5,6 @@ public enum ConversionSource
     JsSnippet,
     WooCommercePlugin,
     ManualReport,
-    Api
+    Api,
+    Storefront
 }

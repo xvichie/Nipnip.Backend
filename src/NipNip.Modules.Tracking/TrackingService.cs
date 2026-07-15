@@ -190,12 +190,30 @@ public class TrackingService(AppDbContext db, IEmailService emailService, ILogge
             .FirstOrDefaultAsync(m => m.Slug == merchantSlug && m.IsActive)
             ?? throw new NotFoundException($"Merchant '{merchantSlug}' not found.");
 
-        if (string.IsNullOrWhiteSpace(merchant.WebsiteUrl))
-            throw new NotFoundException($"Merchant '{merchantSlug}' has no website URL.");
-
         var refCode = $"{creatorSlug}_{merchantSlug}";
-        var separator = merchant.WebsiteUrl.Contains('?') ? '&' : '?';
-        var redirectUrl = $"{merchant.WebsiteUrl}{separator}ref={refCode}";
+
+        // A merchant with affiliate tracking enabled on their NipNip storefront takes priority
+        // over an external WebsiteUrl — that's the site actually collecting the sale.
+        var store = await db.Stores
+            .FirstOrDefaultAsync(s => s.MerchantId == merchant.Id && s.IsActive && s.AffiliateEnabled);
+
+        string targetUrl;
+        if (store is not null)
+        {
+            var host = store.CustomDomainVerifiedAt.HasValue ? store.CustomDomain! : $"{store.Slug}.nipnip.ge";
+            targetUrl = $"https://{host}";
+        }
+        else if (!string.IsNullOrWhiteSpace(merchant.WebsiteUrl))
+        {
+            targetUrl = merchant.WebsiteUrl;
+        }
+        else
+        {
+            throw new NotFoundException($"Merchant '{merchantSlug}' has no website or storefront to redirect to.");
+        }
+
+        var separator = targetUrl.Contains('?') ? '&' : '?';
+        var redirectUrl = $"{targetUrl}{separator}ref={refCode}";
 
         return new RedirectInfo(redirectUrl, creator.Id, merchant.Id, refCode);
     }
@@ -268,6 +286,43 @@ public class TrackingService(AppDbContext db, IEmailService emailService, ILogge
             request.OrderId, request.Amount,
             request.Currency ?? "GEL",
             ConversionSource.Api);
+    }
+
+    // Called in-process by CartService.CheckoutAsync right after an order is placed on a
+    // NipNip-builder storefront with affiliate tracking enabled. Unlike TrackConversionAsync
+    // there's no API key to authenticate — the caller already knows the merchantId — so this
+    // is best-effort: a missing/malformed/unrecognized ref just means "no attribution," not an error.
+    public async Task<ConversionResponse?> TrackStorefrontConversionAsync(
+        Guid merchantId, string? refCode, string orderId, decimal orderAmount, string currency)
+    {
+        if (string.IsNullOrWhiteSpace(refCode)) return null;
+
+        var underscoreIndex = refCode.IndexOf('_');
+        if (underscoreIndex < 1) return null;
+
+        var creatorSlug = refCode[..underscoreIndex];
+        var merchantSlugInRef = refCode[(underscoreIndex + 1)..];
+
+        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.Id == merchantId && m.IsActive);
+        if (merchant is null || !string.Equals(merchant.Slug, merchantSlugInRef, StringComparison.Ordinal))
+            return null;
+
+        var creator = await db.Creators.FirstOrDefaultAsync(c => c.Slug == creatorSlug && c.IsActive);
+        if (creator is null) return null;
+
+        var existing = await db.Conversions
+            .FirstOrDefaultAsync(c => c.MerchantId == merchant.Id && c.OrderId == orderId);
+        if (existing is not null) return existing.ToDto();
+
+        var click = await db.Clicks
+            .Where(c => c.CreatorId == creator.Id && c.MerchantId == merchant.Id)
+            .OrderByDescending(c => c.ClickedAt)
+            .FirstOrDefaultAsync();
+
+        return await ProcessConversionAsync(
+            merchant, creator, click?.Id,
+            orderId, orderAmount, currency,
+            ConversionSource.Storefront);
     }
 
     // POST /api/conversions/manual — authenticated via Clerk JWT (merchant only).
