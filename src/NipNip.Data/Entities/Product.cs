@@ -8,6 +8,7 @@ public class Product
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string? Description { get; set; }
+    public string? VideoUrl { get; set; }
     public decimal BasePrice { get; set; }
     public decimal? SalePrice { get; set; }
     public bool IsActive { get; set; } = true;

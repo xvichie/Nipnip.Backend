@@ -117,7 +117,7 @@ public class MerchantService(AppDbContext db)
     public async Task<PaginatedResult<MerchantResponse>> GetAllAsync(PaginatedRequest request)
     {
         var result = await db.Merchants
-            .Where(m => m.IsActive)
+            .Where(m => m.IsActive && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             .OrderBy(m => m.Name)
             .ToPaginatedResultAsync(request);
 
@@ -126,8 +126,12 @@ public class MerchantService(AppDbContext db)
 
     public async Task<List<MerchantResponse>> GetHighlightedAsync()
     {
+        // A merchant running their own NipNip storefront with affiliate tracking switched off has
+        // explicitly opted out — creators must not be able to discover them or generate a link, since
+        // any sale a creator drives there would go untracked and uncompensated. Merchants with no
+        // storefront at all (WooCommerce/Shopify/custom-site only) are unaffected by this check.
         var merchants = await db.Merchants
-            .Where(m => m.IsActive && m.IsHighlighted)
+            .Where(m => m.IsActive && m.IsHighlighted && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             .OrderBy(m => m.Name)
             .ToListAsync();
         return merchants.Select(m => m.ToDto()).ToList();
@@ -145,7 +149,8 @@ public class MerchantService(AppDbContext db)
     public async Task<MerchantResponse> GetBySlugAsync(string slug)
     {
         var merchant = await db.Merchants
-            .FirstOrDefaultAsync(m => m.Slug == slug && m.IsActive)
+            .FirstOrDefaultAsync(m => m.Slug == slug && m.IsActive
+                && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             ?? throw new NotFoundException($"Merchant '{slug}' not found.");
 
         return merchant.ToDto();

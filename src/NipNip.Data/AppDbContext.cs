@@ -27,6 +27,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OrderNote> OrderNotes => Set<OrderNote>();
     public DbSet<StorePage> StorePages => Set<StorePage>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
+    public DbSet<KnowledgeBaseSection> KnowledgeBaseSections => Set<KnowledgeBaseSection>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

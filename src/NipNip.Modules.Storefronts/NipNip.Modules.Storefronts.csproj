@@ -16,4 +16,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.36.0" />
+  </ItemGroup>
+
 </Project>

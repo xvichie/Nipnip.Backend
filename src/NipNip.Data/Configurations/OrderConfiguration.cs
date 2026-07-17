@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NipNip.Data.Entities;
+using NipNip.Data.Enums;
 
 namespace NipNip.Data.Configurations;
 
@@ -16,6 +17,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.Phone).IsRequired();
         builder.Property(o => o.Address).IsRequired();
         builder.Property(o => o.Total).HasColumnType("decimal(18,2)");
+        builder.Property(o => o.Source).HasDefaultValue(OrderSource.Storefront);
 
         builder.HasMany(o => o.Items)
             .WithOne(i => i.Order)

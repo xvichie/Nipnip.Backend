@@ -18,6 +18,7 @@ public record ProductDetailResponse(
     Guid? CategoryId,
     string Name,
     string? Description,
+    string? VideoUrl,
     decimal BasePrice,
     decimal? SalePrice,
     bool IsActive,
@@ -26,8 +27,13 @@ public record ProductDetailResponse(
     List<ProductVariantResponse> Variants
 );
 
-public record CreateProductRequest(string Name, string? Description, decimal BasePrice, decimal? SalePrice, Guid? CategoryId);
+public record CreateProductRequest(string Name, string? Description, string? VideoUrl, decimal BasePrice, decimal? SalePrice, Guid? CategoryId);
 
-public record UpdateProductRequest(string? Name, string? Description, decimal? BasePrice, decimal? SalePrice, Guid? CategoryId, bool? IsActive);
+/// <summary>
+/// VideoUrl: send "" to clear an existing video back to none, a URL to set/replace it,
+/// or omit the field to leave it untouched (empty string and omission are distinguishable
+/// once deserialized — null is not, since a nullable string omits and nulls identically).
+/// </summary>
+public record UpdateProductRequest(string? Name, string? Description, string? VideoUrl, decimal? BasePrice, decimal? SalePrice, Guid? CategoryId, bool? IsActive);
 
 public record ProductPriceRangeResponse(decimal Min, decimal Max);

@@ -17,6 +17,7 @@ public class Order
     public decimal Total { get; set; }
     public decimal ShippingFee { get; set; }
     public string? ShippingZoneName { get; set; }
+    public OrderSource Source { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? PaymentConfirmedAt { get; set; }
 

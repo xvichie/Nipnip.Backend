@@ -27,16 +27,17 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
 
         var cart = await GetOrCreateCartAsync(slug, sessionId);
 
-        var variant = await db.ProductVariants
-            .Include(v => v.Product).ThenInclude(p => p.Images)
-            .Include(v => v.OptionValues).ThenInclude(ov => ov.OptionValue).ThenInclude(pov => pov.ProductOption)
-            .FirstOrDefaultAsync(v => v.Id == request.VariantId && v.Product.StoreId == cart.StoreId)
-            ?? throw new NotFoundException("Product variant not found.");
+        var variant = await ResolveVariantAsync(cart.StoreId, request.ProductId, request.OptionValueIds);
 
         var existingItem = cart.Items.FirstOrDefault(i => i.VariantId == variant.Id);
+        var newQuantity = (existingItem?.Quantity ?? 0) + request.Quantity;
+
+        if (variant.Stock is { } stock && newQuantity > stock)
+            throw new ArgumentException("Not enough stock available.");
+
         if (existingItem is not null)
         {
-            existingItem.Quantity += request.Quantity;
+            existingItem.Quantity = newQuantity;
         }
         else
         {
@@ -53,6 +54,80 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
 
         await db.SaveChangesAsync();
         return cart.ToDto();
+    }
+
+    /// <summary>
+    /// Finds the variant matching the given option-value combination (or the product's sole
+    /// variant for products with no options). If no explicit override exists for that
+    /// combination, materializes a default variant on the spot at the product's base price
+    /// with unlimited stock — it becomes an ordinary, editable variant from that point on.
+    /// </summary>
+    private async Task<ProductVariant> ResolveVariantAsync(Guid storeId, Guid productId, List<Guid> optionValueIds)
+    {
+        var product = await db.Products
+            .Include(p => p.Options).ThenInclude(o => o.Values)
+            .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
+            .FirstOrDefaultAsync(p => p.Id == productId && p.StoreId == storeId)
+            ?? throw new NotFoundException("Product not found.");
+
+        var configuredOptions = product.Options.Where(o => o.Values.Count > 0).ToList();
+        var selectedIds = optionValueIds.Distinct().ToList();
+
+        if (configuredOptions.Count > 0)
+        {
+            var validCount = configuredOptions.SelectMany(o => o.Values).Count(v => selectedIds.Contains(v.Id));
+            var optionIdsCovered = configuredOptions
+                .Where(o => o.Values.Any(v => selectedIds.Contains(v.Id)))
+                .Select(o => o.Id)
+                .Distinct()
+                .Count();
+
+            if (validCount != selectedIds.Count || optionIdsCovered != configuredOptions.Count || selectedIds.Count != configuredOptions.Count)
+                throw new ArgumentException("Select exactly one value for every product option.");
+        }
+        else if (selectedIds.Count > 0)
+        {
+            throw new ArgumentException("This product has no selectable options.");
+        }
+
+        var existing = product.Variants.FirstOrDefault(v =>
+        {
+            var variantValueIds = v.OptionValues.Select(ov => ov.OptionValueId).ToHashSet();
+            return variantValueIds.SetEquals(selectedIds);
+        });
+
+        var variantId = existing?.Id;
+
+        if (variantId is null)
+        {
+            var defaultVariant = new ProductVariant
+            {
+                Id = Guid.NewGuid(),
+                ProductId = product.Id,
+                Sku = $"AUTO-{Guid.NewGuid():N}"[..13],
+                Price = product.BasePrice,
+                SalePrice = product.SalePrice,
+                Stock = null,
+            };
+            db.ProductVariants.Add(defaultVariant);
+
+            foreach (var valueId in selectedIds)
+            {
+                db.ProductVariantOptionValues.Add(new ProductVariantOptionValue
+                {
+                    VariantId = defaultVariant.Id,
+                    OptionValueId = valueId,
+                });
+            }
+
+            await db.SaveChangesAsync();
+            variantId = defaultVariant.Id;
+        }
+
+        return await db.ProductVariants
+            .Include(v => v.Product).ThenInclude(p => p.Images)
+            .Include(v => v.OptionValues).ThenInclude(ov => ov.OptionValue).ThenInclude(pov => pov.ProductOption)
+            .FirstAsync(v => v.Id == variantId);
     }
 
     public async Task<CartResponse> UpdateItemAsync(string slug, string? sessionId, Guid itemId, UpdateCartItemRequest request)
@@ -85,7 +160,7 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
         return cart.ToDto();
     }
 
-    public async Task<OrderResponse> CheckoutAsync(string slug, string? sessionId, CheckoutRequest request)
+    public async Task<OrderResponse> CheckoutAsync(string slug, string? sessionId, CheckoutRequest request, OrderSource source = OrderSource.Storefront)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerName))
             throw new ArgumentException("Customer name is required.");
@@ -121,6 +196,7 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
             Longitude = request.Longitude,
             PaymentMethod = paymentMethod,
             Status = OrderStatus.Pending,
+            Source = source,
             CreatedAt = DateTimeOffset.UtcNow,
         };
 

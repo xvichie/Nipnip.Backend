@@ -175,6 +175,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
             Name = request.Name.Trim(),
             Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
             Description = request.Description,
+            VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim(),
             BasePrice = request.BasePrice,
             SalePrice = request.SalePrice,
             IsActive = true,
@@ -199,6 +200,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
         }
 
         if (request.Description is not null) product.Description = request.Description;
+
+        if (request.VideoUrl is not null)
+            product.VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim();
 
         if (request.BasePrice.HasValue)
         {
@@ -239,6 +243,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
             Name = $"{original.Name} (Copy)",
             Slug = await GenerateUniqueSlugAsync(original.StoreId, original.Name),
             Description = original.Description,
+            VideoUrl = original.VideoUrl,
             BasePrice = original.BasePrice,
             SalePrice = original.SalePrice,
             IsActive = original.IsActive,

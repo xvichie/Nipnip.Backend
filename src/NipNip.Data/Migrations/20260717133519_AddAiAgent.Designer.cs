@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717133519_AddAiAgent")]
+    partial class AddAiAgent
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -413,39 +416,6 @@ namespace NipNip.Data.Migrations
                     b.ToTable("DiscountCodes");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.KnowledgeBaseSection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<float[]>("Embedding")
-                        .HasColumnType("real[]");
-
-                    b.Property<Guid>("StoreId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StoreId");
-
-                    b.ToTable("KnowledgeBaseSections");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.Merchant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -834,13 +804,16 @@ namespace NipNip.Data.Migrations
                     b.Property<bool>("AffiliateEnabled")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("AiAgentEnabledFacebook")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("AiAgentEnabledInstagram")
+                    b.Property<bool>("AiAgentEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<string>("AiAgentInstructions")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AiAgentReturnPolicy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AiAgentShippingPolicy")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -1080,17 +1053,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Merchant");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.KnowledgeBaseSection", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.Store", "Store")
-                        .WithMany("KnowledgeBaseSections")
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Store");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.Order", b =>
                 {
                     b.HasOne("NipNip.Data.Entities.Store", "Store")
@@ -1312,8 +1274,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Categories");
 
                     b.Navigation("Conversations");
-
-                    b.Navigation("KnowledgeBaseSections");
 
                     b.Navigation("Orders");
 

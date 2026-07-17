@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716135401_MakeVariantStockNullable")]
+    partial class MakeVariantStockNullable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -178,68 +181,6 @@ namespace NipNip.Data.Migrations
                     b.HasIndex("StoreId", "CreatedAt");
 
                     b.ToTable("ContactMessages");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.Conversation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CustomerDisplayName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ExternalUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("LastMessageAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("StoreId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StoreId", "ExternalUserId")
-                        .IsUnique();
-
-                    b.ToTable("Conversations");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ConversationMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ConversationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Direction")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ExternalMessageId")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConversationId");
-
-                    b.HasIndex("ExternalMessageId")
-                        .IsUnique();
-
-                    b.ToTable("ConversationMessages");
                 });
 
             modelBuilder.Entity("NipNip.Data.Entities.Conversion", b =>
@@ -413,39 +354,6 @@ namespace NipNip.Data.Migrations
                     b.ToTable("DiscountCodes");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.KnowledgeBaseSection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<float[]>("Embedding")
-                        .HasColumnType("real[]");
-
-                    b.Property<Guid>("StoreId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StoreId");
-
-                    b.ToTable("KnowledgeBaseSections");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.Merchant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -556,11 +464,6 @@ namespace NipNip.Data.Migrations
 
                     b.Property<string>("ShippingZoneName")
                         .HasColumnType("text");
-
-                    b.Property<int>("Source")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -705,9 +608,6 @@ namespace NipNip.Data.Migrations
                     b.Property<Guid>("StoreId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("VideoUrl")
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
@@ -834,15 +734,6 @@ namespace NipNip.Data.Migrations
                     b.Property<bool>("AffiliateEnabled")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("AiAgentEnabledFacebook")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("AiAgentEnabledInstagram")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("AiAgentInstructions")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -851,18 +742,6 @@ namespace NipNip.Data.Migrations
 
                     b.Property<DateTimeOffset?>("CustomDomainVerifiedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("FacebookConnectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FacebookPageAccessTokenEncrypted")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FacebookPageId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FacebookPageName")
-                        .HasColumnType("text");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -1014,28 +893,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Store");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.Conversation", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.Store", "Store")
-                        .WithMany("Conversations")
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Store");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ConversationMessage", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.Conversation", "Conversation")
-                        .WithMany("Messages")
-                        .HasForeignKey("ConversationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Conversation");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.Conversion", b =>
                 {
                     b.HasOne("NipNip.Data.Entities.Click", "Click")
@@ -1078,17 +935,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Creator");
 
                     b.Navigation("Merchant");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.KnowledgeBaseSection", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.Store", "Store")
-                        .WithMany("KnowledgeBaseSections")
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Store");
                 });
 
             modelBuilder.Entity("NipNip.Data.Entities.Order", b =>
@@ -1258,11 +1104,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Products");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.Conversation", b =>
-                {
-                    b.Navigation("Messages");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.Creator", b =>
                 {
                     b.Navigation("Clicks");
@@ -1310,10 +1151,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Carts");
 
                     b.Navigation("Categories");
-
-                    b.Navigation("Conversations");
-
-                    b.Navigation("KnowledgeBaseSections");
 
                     b.Navigation("Orders");
 

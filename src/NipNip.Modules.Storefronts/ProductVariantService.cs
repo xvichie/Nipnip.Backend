@@ -20,7 +20,7 @@ public class ProductVariantService(AppDbContext db, ProductService productServic
         if (request.SalePrice.HasValue && (request.SalePrice.Value < 0 || request.SalePrice.Value >= request.Price))
             throw new ArgumentException("Sale price must be less than the regular price.");
 
-        if (request.Stock < 0)
+        if (request.Stock is < 0)
             throw new ArgumentException("Stock cannot be negative.");
 
         var product = await productService.GetOwnProductAsync(clerkUserId, productId);
@@ -114,7 +114,11 @@ public class ProductVariantService(AppDbContext db, ProductService productServic
             variant.SalePrice = request.SalePrice;
         }
 
-        if (request.Stock.HasValue)
+        if (request.ClearStock)
+        {
+            variant.Stock = null;
+        }
+        else if (request.Stock.HasValue)
         {
             if (request.Stock.Value < 0)
                 throw new ArgumentException("Stock cannot be negative.");

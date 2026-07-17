@@ -12,6 +12,16 @@ public class Store
     public string? CustomDomain { get; set; }
     public DateTimeOffset? CustomDomainVerifiedAt { get; set; }
     public bool AffiliateEnabled { get; set; } = false;
+
+    public string? FacebookPageId { get; set; }
+    public string? FacebookPageName { get; set; }
+    public string? FacebookPageAccessTokenEncrypted { get; set; }
+    public DateTimeOffset? FacebookConnectedAt { get; set; }
+
+    public bool AiAgentEnabledFacebook { get; set; } = false;
+    public bool AiAgentEnabledInstagram { get; set; } = false;
+    public string? AiAgentInstructions { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public Merchant Merchant { get; set; } = null!;
@@ -19,4 +29,6 @@ public class Store
     public ICollection<Product> Products { get; set; } = [];
     public ICollection<Cart> Carts { get; set; } = [];
     public ICollection<Order> Orders { get; set; } = [];
+    public ICollection<Conversation> Conversations { get; set; } = [];
+    public ICollection<KnowledgeBaseSection> KnowledgeBaseSections { get; set; } = [];
 }

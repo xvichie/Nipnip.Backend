@@ -29,6 +29,7 @@ public static class ProductMappingExtensions
             product.CategoryId,
             product.Name,
             product.Description,
+            product.VideoUrl,
             product.BasePrice,
             product.SalePrice,
             product.IsActive,
