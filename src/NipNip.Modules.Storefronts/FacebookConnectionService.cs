@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using NipNip.Data;
 using NipNip.Data.Entities;
@@ -16,8 +15,7 @@ public class FacebookConnectionService(
     ProductService productService,
     GraphApiClient graph,
     AesStringProtector protector,
-    IOptions<FacebookOptions> options,
-    IConfiguration configuration)
+    IOptions<FacebookOptions> options)
 {
     private const int StateValidMinutes = 10;
     private const string Scopes = "pages_show_list,pages_read_engagement,pages_manage_posts";
@@ -212,5 +210,5 @@ public class FacebookConnectionService(
         }
     }
 
-    private string FrontendUrl => configuration["Email:AppUrl"]?.TrimEnd('/') ?? "http://localhost:3000";
+    private string FrontendUrl => _options.FrontendUrl.TrimEnd('/');
 }
