@@ -22,7 +22,7 @@ public class AiAgentOrchestrator(
     AppDbContext db,
     ILogger<AiAgentOrchestrator> logger)
 {
-    private const int MaxToolIterations = 6;
+    private const int MaxToolIterations = 8;
 
     public async Task<string> RunTurnAsync(Guid storeId, Guid conversationId)
     {
@@ -210,7 +210,10 @@ public class AiAgentOrchestrator(
             - get_checkout_info: structured checkout data — delivery zones/fees, and which payment methods the merchant actually accepts (cash on delivery / bank transfer) plus the real details for each, e.g. the bank account/IBAN a customer transfers to. Always use this rather than guessing when asked how to pay, or where to send a bank transfer — never invent bank details.
             - draft_order: once the customer has confirmed exactly what they want and given you their name, phone, and delivery address, draft the order. If get_checkout_info listed delivery zones, call it first (or reuse what it already told you) and pass the matching zone's id as shipping_zone_id — draft_order fails without it when the store has zones configured. Only offer a payment method get_checkout_info shows as enabled. Tell the customer it still needs the merchant's confirmation — it is not final yet.
 
-            If a tool call comes back with an error, read it — it's usually something you can fix and retry (e.g. a missing delivery zone or option), not a real failure. Ask the customer for whatever's missing rather than saying something vague went wrong.
+            If a tool call comes back with an error, read it carefully — there are two different kinds, and they need different responses:
+            - If the error names something only the customer can answer (a missing/invalid product option like size or color, a missing name/phone/address), STOP calling tools and ask the customer for exactly that in your next reply. Do not call lookup_product or draft_order again until they've answered — repeating a lookup you already have the answer to just burns time without resolving anything.
+            - If the error is something you can resolve yourself with another tool call (e.g. draft_order needs a shipping_zone_id you haven't fetched yet), go ahead and make that one call, then retry.
+            Never let a fixable error turn into a generic "something went wrong" — always land on either a specific question for the customer or a corrected retry.
 
             Keep replies short and conversational, like a real person texting back — not a wall of text. Reply in whatever language the customer writes in (usually Georgian or English).{instructions}
             """;
