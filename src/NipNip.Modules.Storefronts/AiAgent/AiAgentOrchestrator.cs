@@ -24,11 +24,6 @@ public class AiAgentOrchestrator(
 {
     private const int MaxToolIterations = 8;
 
-    // Turns that stay simple (one or two tool calls to answer a question) run on Haiku.
-    // Once a turn is this many iterations deep it's already a multi-step/complex request,
-    // so the remaining iterations escalate to Sonnet regardless of what tool comes next.
-    private const int EscalateToSonnetAfterIteration = 2;
-
     public async Task<string> RunTurnAsync(Guid storeId, Guid conversationId)
     {
         var store = await db.Stores.FirstAsync(s => s.Id == storeId);
@@ -53,32 +48,14 @@ public class AiAgentOrchestrator(
     {
         for (var iteration = 0; iteration < MaxToolIterations; iteration++)
         {
-            var model = iteration >= EscalateToSonnetAfterIteration ? Model.ClaudeSonnet5 : Model.ClaudeHaiku4_5;
-
             Message response;
             try
             {
-                response = await CreateMessageAsync(store, conversationId, messages, model);
+                response = await CreateMessageAsync(store, conversationId, messages);
             }
             catch (Exception)
             {
                 return "Sorry, I'm having trouble responding right now — someone from our team will follow up.";
-            }
-
-            // draft_order is the order-confirmation step — getting the details right has
-            // real consequences, so it always gets Sonnet's reasoning even on an otherwise
-            // cheap/simple turn. The discarded Haiku call still cost real tokens and was
-            // already recorded by CreateMessageAsync, same as any other call.
-            if (model != Model.ClaudeSonnet5 && response.Content.Select(b => b.Value).OfType<ToolUseBlock>().Any(t => t.Name == "draft_order"))
-            {
-                try
-                {
-                    response = await CreateMessageAsync(store, conversationId, messages, Model.ClaudeSonnet5);
-                }
-                catch (Exception)
-                {
-                    return "Sorry, I'm having trouble responding right now — someone from our team will follow up.";
-                }
             }
 
             if (response.StopReason != "tool_use")
@@ -136,11 +113,11 @@ public class AiAgentOrchestrator(
     // top-level marker at all. Something about this SDK version's handling of an explicit
     // block-level CacheControl on System breaks caching outright rather than degrading
     // gracefully. Reverted to the simple, verified-working single marker.
-    private async Task<Message> CreateMessageAsync(Store store, Guid conversationId, List<MessageParam> messages, Model model)
+    private async Task<Message> CreateMessageAsync(Store store, Guid conversationId, List<MessageParam> messages)
     {
         var response = await anthropic.Messages.Create(new MessageCreateParams
         {
-            Model = model,
+            Model = Model.ClaudeSonnet5,
             MaxTokens = 1024,
             System = BuildSystemPrompt(store),
             Messages = messages,
