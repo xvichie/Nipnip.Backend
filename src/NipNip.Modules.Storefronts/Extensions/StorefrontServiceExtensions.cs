@@ -27,6 +27,7 @@ public static class StorefrontServiceExtensions
         services.AddScoped<ContactMessageService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductOptionService>();
+        services.AddScoped<RelatedProductService>();
         services.AddScoped<ProductVariantService>();
         services.AddScoped<ProductImageService>();
         services.AddScoped<CartService>();

@@ -11,7 +11,7 @@ namespace NipNip.Modules.Storefronts.AiAgent;
 
 // Runs one turn of the tool-use loop for a conversation: reads the persisted history
 // (including whatever inbound message the caller already appended), calls Claude with
-// the six store tools available, executes any tool calls, and persists + returns the
+// the five store tools available, executes any tool calls, and persists + returns the
 // resulting reply. Callers are responsible for actually delivering the reply (Messenger
 // send, or just returning it — see MessengerWebhookController and the debug endpoint).
 public class AiAgentOrchestrator(
@@ -23,6 +23,11 @@ public class AiAgentOrchestrator(
     ILogger<AiAgentOrchestrator> logger)
 {
     private const int MaxToolIterations = 8;
+
+    // Turns that stay simple (one or two tool calls to answer a question) run on Haiku.
+    // Once a turn is this many iterations deep it's already a multi-step/complex request,
+    // so the remaining iterations escalate to Sonnet regardless of what tool comes next.
+    private const int EscalateToSonnetAfterIteration = 2;
 
     public async Task<string> RunTurnAsync(Guid storeId, Guid conversationId)
     {
@@ -48,21 +53,32 @@ public class AiAgentOrchestrator(
     {
         for (var iteration = 0; iteration < MaxToolIterations; iteration++)
         {
+            var model = iteration >= EscalateToSonnetAfterIteration ? Model.ClaudeSonnet5 : Model.ClaudeHaiku4_5;
+
             Message response;
             try
             {
-                response = await anthropic.Messages.Create(new MessageCreateParams
-                {
-                    Model = Model.ClaudeOpus4_8,
-                    MaxTokens = 1024,
-                    System = BuildSystemPrompt(store),
-                    Messages = messages,
-                    Tools = BuildToolDefinitions(),
-                });
+                response = await CreateMessageAsync(store, conversationId, messages, model);
             }
             catch (Exception)
             {
                 return "Sorry, I'm having trouble responding right now — someone from our team will follow up.";
+            }
+
+            // draft_order is the order-confirmation step — getting the details right has
+            // real consequences, so it always gets Sonnet's reasoning even on an otherwise
+            // cheap/simple turn. The discarded Haiku call still cost real tokens and was
+            // already recorded by CreateMessageAsync, same as any other call.
+            if (model != Model.ClaudeSonnet5 && response.Content.Select(b => b.Value).OfType<ToolUseBlock>().Any(t => t.Name == "draft_order"))
+            {
+                try
+                {
+                    response = await CreateMessageAsync(store, conversationId, messages, Model.ClaudeSonnet5);
+                }
+                catch (Exception)
+                {
+                    return "Sorry, I'm having trouble responding right now — someone from our team will follow up.";
+                }
             }
 
             if (response.StopReason != "tool_use")
@@ -106,6 +122,42 @@ public class AiAgentOrchestrator(
         return "Sorry, that's taking longer than expected — someone from our team will follow up with you.";
     }
 
+    // Single top-level CacheControl marker (automatic caching: applies to the last
+    // cacheable block in the request) rather than hand-placed breakpoints on System/Tools.
+    // Both are static per-store across the whole conversation, so this prefix — and as the
+    // conversation grows, earlier turns' messages too — reads from cache on every call
+    // after the first. 1h TTL rather than the 5m default since a customer's next reply
+    // over Messenger often takes longer than that.
+    //
+    // Tried splitting this into explicit breakpoints (one on the last Tool, one on System
+    // wrapped as a List<TextBlockParam>) to let tools/system cache independently of the
+    // growing message history — measured empirically and it regressed to zero cache
+    // activity across the board, even with just the System-level breakpoint and no
+    // top-level marker at all. Something about this SDK version's handling of an explicit
+    // block-level CacheControl on System breaks caching outright rather than degrading
+    // gracefully. Reverted to the simple, verified-working single marker.
+    private async Task<Message> CreateMessageAsync(Store store, Guid conversationId, List<MessageParam> messages, Model model)
+    {
+        var response = await anthropic.Messages.Create(new MessageCreateParams
+        {
+            Model = model,
+            MaxTokens = 1024,
+            System = BuildSystemPrompt(store),
+            Messages = messages,
+            Tools = BuildToolDefinitions(),
+            CacheControl = new CacheControlEphemeral { Ttl = Ttl.Ttl1h },
+        });
+
+        await conversations.RecordUsageAsync(
+            conversationId,
+            response.Usage.InputTokens,
+            response.Usage.OutputTokens,
+            response.Usage.CacheReadInputTokens ?? 0,
+            response.Usage.CacheCreationInputTokens ?? 0);
+
+        return response;
+    }
+
     private async Task<string> DispatchToolAsync(Store store, Guid conversationId, string name, IReadOnlyDictionary<string, JsonElement> input)
     {
         try
@@ -114,7 +166,6 @@ public class AiAgentOrchestrator(
             {
                 "list_products" => await tools.ListProductsAsync(store, GetString(input, "query")),
                 "lookup_product" => await tools.LookupProductAsync(store, GetString(input, "url_or_slug") ?? ""),
-                "check_availability" => await tools.CheckAvailabilityAsync(store, GetString(input, "product_slug") ?? "", GetStringDictionary(input, "options")),
                 "get_checkout_info" => tools.GetCheckoutInfo(store),
                 "search_knowledge_base" => await SearchKnowledgeBaseAsync(store, GetString(input, "query") ?? ""),
                 "draft_order" => await tools.DraftOrderAsync(
@@ -141,30 +192,21 @@ public class AiAgentOrchestrator(
         }
     }
 
+    private const int MaxKnowledgeBaseSectionChars = 500;
+
     private async Task<object> SearchKnowledgeBaseAsync(Store store, string query)
     {
         var results = await knowledgeBase.SearchAsync(store, query);
         return results.Count == 0
             ? new { found = false, sections = Array.Empty<object>(), note = "No matching sections in the merchant's knowledge base." }
-            : new { found = true, sections = results.Select(r => new { title = r.Title, content = r.Content }) };
+            : new { found = true, sections = results.Select(r => new { title = r.Title, content = Truncate(r.Content, MaxKnowledgeBaseSectionChars) }) };
     }
+
+    private static string Truncate(string text, int maxChars) =>
+        text.Length <= maxChars ? text : text[..maxChars].TrimEnd() + "…";
 
     private static string? GetString(IReadOnlyDictionary<string, JsonElement> input, string key) =>
         input.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
-    private static Dictionary<string, string> GetStringDictionary(IReadOnlyDictionary<string, JsonElement> input, string key)
-    {
-        var result = new Dictionary<string, string>();
-        if (input.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var prop in value.EnumerateObject())
-            {
-                if (prop.Value.ValueKind == JsonValueKind.String)
-                    result[prop.Name] = prop.Value.GetString()!;
-            }
-        }
-        return result;
-    }
 
     private static List<DraftOrderItemInput> GetOrderItems(IReadOnlyDictionary<string, JsonElement> input)
     {
@@ -204,8 +246,7 @@ public class AiAgentOrchestrator(
 
             Use the available tools to answer accurately — never guess at product availability, pricing, or policies:
             - list_products: browse or search the catalog. Use this when the customer asks what you sell, wants recommendations, or names something generically (e.g. "any sneakers?") without a specific link — never say you don't know what's in stock without checking this first. Follow up with lookup_product on a specific result for full details.
-            - lookup_product: look up a product by the storefront link or slug the customer shared. Its description often answers sizing/fit questions (e.g. whether to size up).
-            - check_availability: confirm a specific size/color/variant is actually in stock before promising it.
+            - lookup_product: look up a product by the storefront link or slug the customer shared. Its description often answers sizing/fit questions (e.g. whether to size up). Its variants list covers every option combination (e.g. size/color) that has an explicit stock override — treat any of those marked unavailable as out of stock, and any combination NOT listed there as available at the product's base/sale price. This is enough to confirm availability without a separate lookup — never guess, but you also never need to check the same product twice.
             - search_knowledge_base: use this for any policy or informational question — shipping, returns, takeout, warranty, anything the merchant has written up. Don't guess or answer from memory; search first.
             - get_checkout_info: structured checkout data — delivery zones/fees, and which payment methods the merchant actually accepts (cash on delivery / bank transfer) plus the real details for each, e.g. the bank account/IBAN a customer transfers to. Always use this rather than guessing when asked how to pay, or where to send a bank transfer — never invent bank details.
             - draft_order: once the customer has confirmed exactly what they want and given you their name, phone, and delivery address, draft the order. If get_checkout_info listed delivery zones, call it first (or reuse what it already told you) and pass the matching zone's id as shipping_zone_id — draft_order fails without it when the store has zones configured. Only offer a payment method get_checkout_info shows as enabled. Tell the customer it still needs the merchant's confirmation — it is not final yet.
@@ -244,25 +285,6 @@ public class AiAgentOrchestrator(
                     ["url_or_slug"] = JsonSerializer.SerializeToElement(new { type = "string", description = "The product's storefront URL or slug, as the customer shared it." }),
                 },
                 Required = ["url_or_slug"],
-            },
-        },
-        new Tool
-        {
-            Name = "check_availability",
-            Description = "Check whether a specific option combination (e.g. size, color) of a product is in stock before promising it to the customer.",
-            InputSchema = new()
-            {
-                Properties = new Dictionary<string, JsonElement>
-                {
-                    ["product_slug"] = JsonSerializer.SerializeToElement(new { type = "string", description = "The product's slug, from lookup_product." }),
-                    ["options"] = JsonSerializer.SerializeToElement(new
-                    {
-                        type = "object",
-                        description = "Map of option name to chosen value, e.g. {\"Size\": \"43\", \"Color\": \"Black\"}. Omit for products with no options.",
-                        additionalProperties = new { type = "string" },
-                    }),
-                },
-                Required = ["product_slug"],
             },
         },
         new Tool

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717184508_AddProductRelations")]
+    partial class AddProductRelations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -201,18 +204,6 @@ namespace NipNip.Data.Migrations
 
                     b.Property<Guid>("StoreId")
                         .HasColumnType("uuid");
-
-                    b.Property<long>("TotalCacheCreationInputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("TotalCacheReadInputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("TotalInputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("TotalOutputTokens")
-                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -535,18 +526,6 @@ namespace NipNip.Data.Migrations
                     b.Property<string>("Address")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<long?>("AiCacheCreationInputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("AiCacheReadInputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("AiInputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("AiOutputTokens")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

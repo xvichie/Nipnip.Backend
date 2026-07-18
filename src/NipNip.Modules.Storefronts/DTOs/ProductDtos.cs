@@ -24,7 +24,8 @@ public record ProductDetailResponse(
     bool IsActive,
     List<ProductImageResponse> Images,
     List<ProductOptionResponse> Options,
-    List<ProductVariantResponse> Variants
+    List<ProductVariantResponse> Variants,
+    List<ProductSummaryResponse> RelatedProducts
 );
 
 public record CreateProductRequest(string Name, string? Description, string? VideoUrl, decimal BasePrice, decimal? SalePrice, Guid? CategoryId);

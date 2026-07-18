@@ -21,6 +21,14 @@ public class Order
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? PaymentConfirmedAt { get; set; }
 
+    // Snapshot of the originating Conversation's cumulative token usage at the moment
+    // this order was drafted — only set for Source == OrderSource.AiAgent. Lets
+    // cost-per-order be queried without joining back through conversation history.
+    public long? AiInputTokens { get; set; }
+    public long? AiOutputTokens { get; set; }
+    public long? AiCacheReadInputTokens { get; set; }
+    public long? AiCacheCreationInputTokens { get; set; }
+
     public Store Store { get; set; } = null!;
     public ICollection<OrderItem> Items { get; set; } = [];
     public ICollection<OrderNote> Notes { get; set; } = [];

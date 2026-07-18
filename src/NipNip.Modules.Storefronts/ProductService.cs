@@ -11,6 +11,9 @@ namespace NipNip.Modules.Storefronts;
 
 public class ProductService(AppDbContext db, StoreService storeService)
 {
+    private const decimal RelatedPriceBracket = 0.3m;
+    private const int RelatedProductsLimit = 8;
+
     public async Task<PaginatedResult<ProductSummaryResponse>> GetAllForOwnStoreAsync(
         string clerkUserId,
         PaginatedRequest pagination,
@@ -141,7 +144,56 @@ public class ProductService(AppDbContext db, StoreService storeService)
             .FirstOrDefaultAsync(p => p.Slug == productSlug && p.StoreId == store.Id && p.IsActive)
             ?? throw new NotFoundException("Product not found.");
 
-        return product.ToDetailDto();
+        var relatedProducts = await GetRelatedProductsAsync(product);
+
+        return product.ToDetailDto(relatedProducts);
+    }
+
+    // A merchant's manual picks win outright (in their chosen order) if any exist;
+    // otherwise falls back to same category + a price bracket around this product's
+    // own price, closest-price-first. Manual picks are looked up first specifically so
+    // the (usually cheap) fallback query never runs when it isn't needed.
+    private async Task<List<ProductSummaryResponse>> GetRelatedProductsAsync(Product product)
+    {
+        var manualOrder = await db.ProductRelations
+            .Where(r => r.ProductId == product.Id)
+            .OrderBy(r => r.SortOrder)
+            .Select(r => r.RelatedProductId)
+            .ToListAsync();
+
+        if (manualOrder.Count > 0)
+        {
+            var manualProducts = await db.Products
+                .Include(p => p.Images)
+                .Where(p => manualOrder.Contains(p.Id) && p.IsActive)
+                .ToDictionaryAsync(p => p.Id);
+
+            return manualOrder
+                .Where(manualProducts.ContainsKey)
+                .Select(id => manualProducts[id].ToSummaryDto())
+                .ToList();
+        }
+
+        var effectivePrice = product.SalePrice ?? product.BasePrice;
+        var minPrice = effectivePrice * (1 - RelatedPriceBracket);
+        var maxPrice = effectivePrice * (1 + RelatedPriceBracket);
+
+        var fallbackQuery = db.Products
+            .Include(p => p.Images)
+            .Where(p => p.StoreId == product.StoreId && p.Id != product.Id && p.IsActive);
+
+        if (product.CategoryId.HasValue)
+            fallbackQuery = fallbackQuery.Where(p => p.CategoryId == product.CategoryId);
+
+        var candidates = await fallbackQuery
+            .Where(p => (p.SalePrice ?? p.BasePrice) >= minPrice && (p.SalePrice ?? p.BasePrice) <= maxPrice)
+            .ToListAsync();
+
+        return candidates
+            .OrderBy(p => Math.Abs((p.SalePrice ?? p.BasePrice) - effectivePrice))
+            .Take(RelatedProductsLimit)
+            .Select(p => p.ToSummaryDto())
+            .ToList();
     }
 
     public async Task<ProductDetailResponse> GetOwnByIdAsync(string clerkUserId, Guid id)
@@ -323,6 +375,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
         var variantIds = product.Variants.Select(v => v.Id).ToList();
         if (variantIds.Count > 0 && await db.OrderItems.AnyAsync(oi => variantIds.Contains(oi.VariantId)))
             throw new ConflictException("Cannot delete a product with variants referenced by existing orders.");
+
+        if (await db.ProductRelations.AnyAsync(r => r.RelatedProductId == id))
+            throw new ConflictException("Cannot delete a product that another product has manually related to it — remove it from that product's related list first.");
 
         db.Products.Remove(product);
         await db.SaveChangesAsync();

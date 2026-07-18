@@ -7,7 +7,7 @@ using NipNip.Modules.Storefronts.DTOs;
 
 namespace NipNip.Modules.Storefronts.AiAgent;
 
-public record ProductVariantInfo(string? OptionSummary, decimal Price, decimal? SalePrice, int? Stock);
+public record ProductVariantInfo(string? OptionSummary, decimal Price, decimal? SalePrice, int? Stock, bool Available);
 
 public record ProductLookupResult(
     bool Found,
@@ -19,8 +19,6 @@ public record ProductLookupResult(
     decimal? SalePrice = null,
     Dictionary<string, List<string>>? Options = null,
     List<ProductVariantInfo>? Variants = null);
-
-public record AvailabilityResult(bool Found, string? Error, bool Available = false, decimal? Price = null, int? Stock = null, string? Note = null);
 
 public record ShippingZoneInfo(string Id, string Name, decimal Price);
 
@@ -44,12 +42,13 @@ public record ProductSummary(string Name, string Slug, string Url, decimal BaseP
 public class AiAgentToolService(AppDbContext db, CartService cartService)
 {
     private const string StorefrontRootDomain = "nipnip.ge";
+    private const int MaxDescriptionChars = 240;
 
     // Catalog browsing — the other tools all need a specific product already in hand
     // (a link or a slug), so a customer asking "what do you sell?" or "any sneakers?"
     // has nothing to call without this. Returns a real storefront URL per product so
     // the agent can share it directly rather than constructing links itself.
-    public async Task<List<ProductSummary>> ListProductsAsync(Store store, string? search, int limit = 10)
+    public async Task<List<ProductSummary>> ListProductsAsync(Store store, string? search, int limit = 5)
     {
         var query = db.Products.Where(p => p.StoreId == store.Id && p.IsActive);
 
@@ -84,74 +83,27 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
         var options = product.Options.ToDictionary(o => o.Name, o => o.Values.Select(v => v.Value).ToList());
 
         // Only explicit variant overrides show up here (e.g. a size that's out of stock) —
-        // combinations with no row are implicitly available; check_availability confirms those.
+        // combinations with no row here are implicitly available at the base/sale price
+        // (smart-defaults model — see the system prompt's lookup_product bullet).
         var variants = product.Variants.Select(v => new ProductVariantInfo(
             v.OptionValues.Count > 0
                 ? string.Join(", ", v.OptionValues.Select(ov => $"{ov.OptionValue.ProductOption.Name}: {ov.OptionValue.Value}"))
                 : null,
             v.Price,
             v.SalePrice,
-            v.Stock
+            v.Stock,
+            v.Stock is null || v.Stock > 0
         )).ToList();
+
+        var description = product.Description is { Length: > MaxDescriptionChars }
+            ? product.Description[..MaxDescriptionChars].TrimEnd() + "…"
+            : product.Description;
 
         return new ProductLookupResult(
             true, null,
-            product.Name, product.Description, product.Slug,
+            product.Name, description, product.Slug,
             product.BasePrice, product.SalePrice,
             options, variants);
-    }
-
-    // Deliberately read-only — does NOT call CartService's variant resolution, which
-    // materializes a real ProductVariant row as a side effect just from being asked
-    // "what if". Replicates its validation as a pure read instead.
-    public async Task<AvailabilityResult> CheckAvailabilityAsync(Store store, string productSlug, Dictionary<string, string> options)
-    {
-        var product = await db.Products
-            .Include(p => p.Options).ThenInclude(o => o.Values)
-            .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
-            .FirstOrDefaultAsync(p => p.StoreId == store.Id && p.Slug == productSlug && p.IsActive);
-
-        if (product is null)
-            return new AvailabilityResult(false, "Product not found.");
-
-        var configuredOptions = product.Options.Where(o => o.Values.Count > 0).ToList();
-
-        if (configuredOptions.Count == 0)
-        {
-            if (options.Count > 0)
-                return new AvailabilityResult(false, "This product has no selectable options.");
-
-            var sole = product.Variants.FirstOrDefault(v => v.OptionValues.Count == 0);
-            return sole is not null
-                ? DescribeVariant(sole)
-                : new AvailabilityResult(true, null, true, product.SalePrice ?? product.BasePrice);
-        }
-
-        var selectedIds = new List<Guid>();
-        foreach (var option in configuredOptions)
-        {
-            if (!options.TryGetValue(option.Name, out var desiredValue))
-                return new AvailabilityResult(false, $"Missing a value for option '{option.Name}'.");
-
-            var match = option.Values.FirstOrDefault(v => string.Equals(v.Value, desiredValue, StringComparison.OrdinalIgnoreCase));
-            if (match is null)
-                return new AvailabilityResult(false, $"'{desiredValue}' isn't a valid value for '{option.Name}'.");
-
-            selectedIds.Add(match.Id);
-        }
-
-        var existing = product.Variants.FirstOrDefault(v =>
-        {
-            var variantValueIds = v.OptionValues.Select(ov => ov.OptionValueId).ToHashSet();
-            return variantValueIds.SetEquals(selectedIds);
-        });
-
-        if (existing is not null)
-            return DescribeVariant(existing);
-
-        // No explicit row for this combination — smart-defaults model treats it as
-        // available with unlimited stock at the product's base/sale price.
-        return new AvailabilityResult(true, null, true, product.SalePrice ?? product.BasePrice);
     }
 
     // Reuses CartService's own AddItemAsync/CheckoutAsync rather than a parallel
@@ -226,6 +178,19 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
                 new CheckoutRequest(customerName, effectiveEmail, phone, address, null, null, paymentMethod ?? "CashOnDelivery", shippingZoneId, null),
                 OrderSource.AiAgent);
 
+            // Snapshot the conversation's cumulative usage onto the order it produced, so
+            // cost-per-order is queryable without joining back through conversation history.
+            // Safe to read straight off the tracked Conversation entity — RecordUsageAsync
+            // (called after every Messages.Create this turn, including the one that led to
+            // this draft_order call) shares this same scoped AppDbContext.
+            var conversationUsage = await db.Conversations.FirstAsync(c => c.Id == conversationId);
+            var orderEntity = await db.Orders.FirstAsync(o => o.Id == order.Id);
+            orderEntity.AiInputTokens = conversationUsage.TotalInputTokens;
+            orderEntity.AiOutputTokens = conversationUsage.TotalOutputTokens;
+            orderEntity.AiCacheReadInputTokens = conversationUsage.TotalCacheReadInputTokens;
+            orderEntity.AiCacheCreationInputTokens = conversationUsage.TotalCacheCreationInputTokens;
+            await db.SaveChangesAsync();
+
             return new DraftOrderResult(true, null, order.Id, order.Total);
         }
         catch (ArgumentException ex)
@@ -286,13 +251,6 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
         }
 
         return new CheckoutInfoResult(zones, freeThreshold, codEnabled, codNotes, bankTransferEnabled, bankTransferNotes);
-    }
-
-    private static AvailabilityResult DescribeVariant(ProductVariant variant)
-    {
-        var available = variant.Stock is null || variant.Stock > 0;
-        return new AvailabilityResult(true, null, available, variant.SalePrice ?? variant.Price, variant.Stock,
-            available ? null : "Out of stock.");
     }
 
     // Accepts a bare slug, a path, or a full URL. Full URLs are checked against this

@@ -58,7 +58,27 @@ public class ConversationService(AppDbContext db, StoreService storeService)
         return message;
     }
 
-    public async Task<List<ConversationMessageResponse>> GetHistoryAsync(Guid conversationId, int limit = 20)
+    // Called after every Messages.Create in the orchestrator's tool loop — running totals
+    // let cost-per-conversation/cost-per-order be queried directly instead of re-deriving
+    // it from provider logs.
+    public async Task RecordUsageAsync(Guid conversationId, long inputTokens, long outputTokens, long cacheReadTokens, long cacheCreationTokens)
+    {
+        var conversation = await db.Conversations.FirstAsync(c => c.Id == conversationId);
+        conversation.TotalInputTokens += inputTokens;
+        conversation.TotalOutputTokens += outputTokens;
+        conversation.TotalCacheReadInputTokens += cacheReadTokens;
+        conversation.TotalCacheCreationInputTokens += cacheCreationTokens;
+        await db.SaveChangesAsync();
+    }
+
+    // 12 messages (~6 exchanges) comfortably covers a single-intent shopping conversation
+    // (browse -> size/fit -> contact details -> payment -> confirm) without dragging in
+    // stale context from far earlier. Kept smaller than before deliberately: once a
+    // conversation outgrows this window it starts sliding, and every slide forces a fresh
+    // (uncached) resend of whatever's still in it — the tools/system prompt no longer ride
+    // along with that resend (see CreateMessageAsync's cache breakpoints), so the smaller
+    // the window, the cheaper each slide is.
+    public async Task<List<ConversationMessageResponse>> GetHistoryAsync(Guid conversationId, int limit = 12)
     {
         var messages = await db.ConversationMessages
             .Where(m => m.ConversationId == conversationId)
