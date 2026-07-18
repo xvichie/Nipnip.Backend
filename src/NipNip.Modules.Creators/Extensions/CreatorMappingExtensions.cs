@@ -25,6 +25,7 @@ public static class CreatorMappingExtensions
             creator.LinkedinFollowers,
             creator.IsActive,
             creator.IsHighlighted,
+            creator.IsTest,
             creator.CreatedAt
         );
 }

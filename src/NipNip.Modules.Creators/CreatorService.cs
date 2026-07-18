@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using NipNip.Data;
 using NipNip.Data.Entities;
 using NipNip.Data.Enums;
@@ -11,9 +12,22 @@ using NipNip.Shared.Pagination;
 
 namespace NipNip.Modules.Creators;
 
-public class CreatorService(AppDbContext db)
+public class CreatorService(AppDbContext db, IConfiguration configuration)
 {
     private static readonly Regex SlugRegex = new(@"^[a-z0-9][a-z0-9-]*$", RegexOptions.Compiled);
+
+    // Mirrors MerchantService.CanSeeTestMerchantsAsync — test creators stay hidden from the public
+    // directory unless the viewer is an admin or the paired test merchant.
+    private async Task<bool> CanSeeTestCreatorsAsync(string? callerClerkUserId)
+    {
+        if (callerClerkUserId is null) return false;
+
+        var adminIds = (configuration["AdminClerkUserIds"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (adminIds.Contains(callerClerkUserId)) return true;
+
+        return await db.Merchants.AnyAsync(m => m.ClerkUserId == callerClerkUserId && m.IsTest);
+    }
 
     public async Task<CreatorResponse> RegisterAsync(string clerkUserId, RegisterCreatorRequest request)
     {
@@ -67,19 +81,25 @@ public class CreatorService(AppDbContext db)
         return creator.ToDto();
     }
 
-    public async Task<PaginatedResult<CreatorResponse>> GetAllPublicAsync(PaginatedRequest request)
+    public async Task<PaginatedResult<CreatorResponse>> GetAllPublicAsync(PaginatedRequest request, string? callerClerkUserId)
     {
+        var canSeeTest = await CanSeeTestCreatorsAsync(callerClerkUserId);
+
         var result = await db.Creators
             .Where(c => c.IsActive)
+            .Where(c => canSeeTest || !c.IsTest)
             .OrderBy(c => c.Name)
             .ToPaginatedResultAsync(request);
         return result.Map(c => c.ToDto());
     }
 
-    public async Task<List<CreatorResponse>> GetHighlightedAsync()
+    public async Task<List<CreatorResponse>> GetHighlightedAsync(string? callerClerkUserId)
     {
+        var canSeeTest = await CanSeeTestCreatorsAsync(callerClerkUserId);
+
         var creators = await db.Creators
             .Where(c => c.IsActive && c.IsHighlighted)
+            .Where(c => canSeeTest || !c.IsTest)
             .OrderBy(c => c.Name)
             .ToListAsync();
         return creators.Select(c => c.ToDto()).ToList();
@@ -90,6 +110,15 @@ public class CreatorService(AppDbContext db)
         var creator = await db.Creators.FindAsync(id)
             ?? throw new NotFoundException("Creator not found.");
         creator.IsHighlighted = !creator.IsHighlighted;
+        await db.SaveChangesAsync();
+        return creator.ToDto();
+    }
+
+    public async Task<CreatorResponse> ToggleTestAsync(Guid id)
+    {
+        var creator = await db.Creators.FindAsync(id)
+            ?? throw new NotFoundException("Creator not found.");
+        creator.IsTest = !creator.IsTest;
         await db.SaveChangesAsync();
         return creator.ToDto();
     }

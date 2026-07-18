@@ -16,14 +16,14 @@ public class CreatorController(CreatorService creatorService) : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<PaginatedResult<CreatorResponse>>> GetAll([FromQuery] PaginatedRequest pagination)
     {
-        return Ok(await creatorService.GetAllPublicAsync(pagination));
+        return Ok(await creatorService.GetAllPublicAsync(pagination, User.TryGetClerkUserId()));
     }
 
     [HttpGet("highlighted")]
     [AllowAnonymous]
     public async Task<ActionResult<List<CreatorResponse>>> GetHighlighted()
     {
-        return Ok(await creatorService.GetHighlightedAsync());
+        return Ok(await creatorService.GetHighlightedAsync(User.TryGetClerkUserId()));
     }
 
     [HttpGet("me")]

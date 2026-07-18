@@ -21,6 +21,7 @@ public class Creator
     public int? LinkedinFollowers { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsHighlighted { get; set; } = false;
+    public bool IsTest { get; set; } = false;
     public DateTimeOffset CreatedAt { get; set; }
 
     public ICollection<Click> Clicks { get; set; } = [];

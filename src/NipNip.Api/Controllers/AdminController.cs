@@ -158,6 +158,12 @@ public class AdminController(
         return Ok(await merchantService.ToggleHighlightAsync(id));
     }
 
+    [HttpPut("merchants/{id:guid}/test-flag")]
+    public async Task<ActionResult<MerchantResponse>> ToggleMerchantTest(Guid id)
+    {
+        return Ok(await merchantService.ToggleTestAsync(id));
+    }
+
     [HttpGet("merchants/{merchantId:guid}/store")]
     public async Task<ActionResult<StoreResponse?>> GetMerchantStore(Guid merchantId)
     {
@@ -185,6 +191,12 @@ public class AdminController(
     public async Task<ActionResult<CreatorResponse>> ToggleCreatorHighlight(Guid id)
     {
         return Ok(await creatorService.ToggleHighlightAsync(id));
+    }
+
+    [HttpPut("creators/{id:guid}/test-flag")]
+    public async Task<ActionResult<CreatorResponse>> ToggleCreatorTest(Guid id)
+    {
+        return Ok(await creatorService.ToggleTestAsync(id));
     }
 
     [HttpDelete("creators/{id:guid}")]

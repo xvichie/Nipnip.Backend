@@ -20,6 +20,7 @@ public static class MerchantMappingExtensions
             merchant.NotificationEmail,
             merchant.IsActive,
             merchant.IsHighlighted,
+            merchant.IsTest,
             merchant.CreatedAt
         );
 }

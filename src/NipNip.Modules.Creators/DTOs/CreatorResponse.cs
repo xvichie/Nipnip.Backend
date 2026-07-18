@@ -19,5 +19,6 @@ public record CreatorResponse(
     int? LinkedinFollowers,
     bool IsActive,
     bool IsHighlighted,
+    bool IsTest,
     DateTimeOffset CreatedAt
 );

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using NipNip.Data;
 using NipNip.Data.Entities;
 using NipNip.Data.Enums;
@@ -11,9 +12,23 @@ using NipNip.Shared.Pagination;
 
 namespace NipNip.Modules.Merchants;
 
-public class MerchantService(AppDbContext db)
+public class MerchantService(AppDbContext db, IConfiguration configuration)
 {
     private static readonly Regex SlugRegex = new(@"^[a-z0-9][a-z0-9-]*$", RegexOptions.Compiled);
+
+    // Test merchants/creators are hidden from the public marketplace by default — only admins and
+    // the paired test account (whichever side is signed in) should see them, so QA testing doesn't
+    // leak fake listings to real users.
+    private async Task<bool> CanSeeTestMerchantsAsync(string? callerClerkUserId)
+    {
+        if (callerClerkUserId is null) return false;
+
+        var adminIds = (configuration["AdminClerkUserIds"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (adminIds.Contains(callerClerkUserId)) return true;
+
+        return await db.Creators.AnyAsync(c => c.ClerkUserId == callerClerkUserId && c.IsTest);
+    }
 
     public async Task<MerchantResponse> RegisterAsync(string clerkUserId, RegisterMerchantRequest request)
     {
@@ -114,27 +129,42 @@ public class MerchantService(AppDbContext db)
         return merchant.ToDto();
     }
 
-    public async Task<PaginatedResult<MerchantResponse>> GetAllAsync(PaginatedRequest request)
+    public async Task<PaginatedResult<MerchantResponse>> GetAllAsync(PaginatedRequest request, string? callerClerkUserId)
     {
+        var canSeeTest = await CanSeeTestMerchantsAsync(callerClerkUserId);
+
         var result = await db.Merchants
             .Where(m => m.IsActive && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
+            .Where(m => canSeeTest || !m.IsTest)
             .OrderBy(m => m.Name)
             .ToPaginatedResultAsync(request);
 
         return result.Map(m => m.ToDto());
     }
 
-    public async Task<List<MerchantResponse>> GetHighlightedAsync()
+    public async Task<List<MerchantResponse>> GetHighlightedAsync(string? callerClerkUserId)
     {
+        var canSeeTest = await CanSeeTestMerchantsAsync(callerClerkUserId);
+
         // A merchant running their own NipNip storefront with affiliate tracking switched off has
         // explicitly opted out — creators must not be able to discover them or generate a link, since
         // any sale a creator drives there would go untracked and uncompensated. Merchants with no
         // storefront at all (WooCommerce/Shopify/custom-site only) are unaffected by this check.
         var merchants = await db.Merchants
             .Where(m => m.IsActive && m.IsHighlighted && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
+            .Where(m => canSeeTest || !m.IsTest)
             .OrderBy(m => m.Name)
             .ToListAsync();
         return merchants.Select(m => m.ToDto()).ToList();
+    }
+
+    public async Task<MerchantResponse> ToggleTestAsync(Guid id)
+    {
+        var merchant = await db.Merchants.FindAsync(id)
+            ?? throw new NotFoundException("Merchant not found.");
+        merchant.IsTest = !merchant.IsTest;
+        await db.SaveChangesAsync();
+        return merchant.ToDto();
     }
 
     public async Task<MerchantResponse> ToggleHighlightAsync(Guid id)

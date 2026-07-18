@@ -16,14 +16,14 @@ public class MerchantController(MerchantService merchantService) : ControllerBas
     [AllowAnonymous]
     public async Task<ActionResult<PaginatedResult<MerchantResponse>>> GetAll([FromQuery] PaginatedRequest pagination)
     {
-        return Ok(await merchantService.GetAllAsync(pagination));
+        return Ok(await merchantService.GetAllAsync(pagination, User.TryGetClerkUserId()));
     }
 
     [HttpGet("highlighted")]
     [AllowAnonymous]
     public async Task<ActionResult<List<MerchantResponse>>> GetHighlighted()
     {
-        return Ok(await merchantService.GetHighlightedAsync());
+        return Ok(await merchantService.GetHighlightedAsync(User.TryGetClerkUserId()));
     }
 
     [HttpGet("me")]

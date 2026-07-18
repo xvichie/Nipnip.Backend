@@ -14,5 +14,6 @@ public record MerchantResponse(
     string? NotificationEmail,
     bool IsActive,
     bool IsHighlighted,
+    bool IsTest,
     DateTimeOffset CreatedAt
 );

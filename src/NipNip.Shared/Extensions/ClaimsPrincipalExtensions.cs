@@ -9,4 +9,10 @@ public static class ClaimsPrincipalExtensions
         return user.FindFirst("sub")?.Value
             ?? throw new InvalidOperationException("Authenticated user has no sub claim.");
     }
+
+    /// <summary>Like <see cref="GetClerkUserId"/> but returns null instead of throwing — for [AllowAnonymous] endpoints.</summary>
+    public static string? TryGetClerkUserId(this ClaimsPrincipal user)
+    {
+        return user.FindFirst("sub")?.Value;
+    }
 }
