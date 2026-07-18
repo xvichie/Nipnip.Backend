@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NipNip.Data;
@@ -19,6 +20,7 @@ namespace NipNip.Api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
+[Authorize(Policy = "AdminOnly")]
 public class AdminController(
     MerchantService merchantService,
     CreatorService creatorService,
@@ -183,6 +185,12 @@ public class AdminController(
     public async Task<ActionResult<CreatorResponse>> ToggleCreatorHighlight(Guid id)
     {
         return Ok(await creatorService.ToggleHighlightAsync(id));
+    }
+
+    [HttpDelete("creators/{id:guid}")]
+    public async Task<ActionResult<CreatorResponse>> DeactivateCreator(Guid id)
+    {
+        return Ok(await creatorService.DeactivateAsync(id));
     }
 
     // --- Conversions ---

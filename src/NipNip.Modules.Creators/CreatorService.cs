@@ -94,6 +94,16 @@ public class CreatorService(AppDbContext db)
         return creator.ToDto();
     }
 
+    public async Task<CreatorResponse> DeactivateAsync(Guid id)
+    {
+        var creator = await db.Creators.FindAsync(id)
+            ?? throw new NotFoundException("Creator not found.");
+
+        creator.IsActive = false;
+        await db.SaveChangesAsync();
+        return creator.ToDto();
+    }
+
     public async Task<CreatorResponse> GetBySlugAsync(string slug)
     {
         var creator = await db.Creators

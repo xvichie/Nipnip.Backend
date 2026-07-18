@@ -16,6 +16,12 @@ using NipNip.Modules.Tracking.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Per README: local secrets (connection string, Clerk keys, Facebook/Anthropic/Voyage
+// keys, etc.) live in this gitignored file rather than the tracked appsettings.json.
+// Not environment-gated — safe to add unconditionally since it's optional and simply
+// absent outside a dev machine.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddControllers()
     .AddApplicationPart(typeof(NipNip.Modules.Codes.CodeController).Assembly)
     .AddApplicationPart(typeof(NipNip.Modules.Merchants.MerchantController).Assembly)
@@ -88,7 +94,18 @@ if (builder.Environment.IsDevelopment())
         .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>("Dev", _ => { });
 }
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Fail-closed: an unset AdminClerkUserId denies everyone rather than granting
+    // access to /api/admin/* to any authenticated user.
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAssertion(ctx =>
+        {
+            var adminClerkUserId = builder.Configuration["AdminClerkUserId"];
+            return !string.IsNullOrWhiteSpace(adminClerkUserId)
+                && ctx.User.FindFirst("sub")?.Value == adminClerkUserId;
+        }));
+});
 
 var app = builder.Build();
 
