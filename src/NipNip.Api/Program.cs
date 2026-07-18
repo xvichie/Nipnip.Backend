@@ -96,14 +96,15 @@ if (builder.Environment.IsDevelopment())
 
 builder.Services.AddAuthorization(options =>
 {
-    // Fail-closed: an unset AdminClerkUserId denies everyone rather than granting
+    // Fail-closed: an unset/empty AdminClerkUserIds denies everyone rather than granting
     // access to /api/admin/* to any authenticated user.
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireAssertion(ctx =>
         {
-            var adminClerkUserId = builder.Configuration["AdminClerkUserId"];
-            return !string.IsNullOrWhiteSpace(adminClerkUserId)
-                && ctx.User.FindFirst("sub")?.Value == adminClerkUserId;
+            var adminClerkUserIds = (builder.Configuration["AdminClerkUserIds"] ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var sub = ctx.User.FindFirst("sub")?.Value;
+            return sub != null && adminClerkUserIds.Contains(sub);
         }));
 });
 
