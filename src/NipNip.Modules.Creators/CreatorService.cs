@@ -252,4 +252,69 @@ public class CreatorService(AppDbContext db, IConfiguration configuration)
             to
         );
     }
+
+    // --- Merchant access requests ---
+
+    public async Task<List<CreatorAccessRequestResponse>> GetMyAccessRequestsAsync(string clerkUserId)
+    {
+        var creator = await db.Creators.FirstOrDefaultAsync(c => c.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a creator account.");
+
+        var requests = await db.MerchantAccessRequests
+            .Where(a => a.CreatorId == creator.Id)
+            .Include(a => a.Merchant)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+
+        return requests.Select(a => ToAccessRequestResponse(a)).ToList();
+    }
+
+    public async Task<CreatorAccessRequestResponse> RequestMerchantAccessAsync(string clerkUserId, RequestMerchantAccessRequest request)
+    {
+        var creator = await db.Creators.FirstOrDefaultAsync(c => c.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a creator account.");
+
+        var merchant = await db.Merchants.FindAsync(request.MerchantId)
+            ?? throw new NotFoundException("Merchant not found.");
+
+        if (merchant.IsPublic)
+            throw new ArgumentException("This merchant is public — no request needed.");
+
+        var existing = await db.MerchantAccessRequests
+            .FirstOrDefaultAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id);
+
+        if (existing is not null)
+        {
+            if (existing.Status is MerchantAccessRequestStatus.Pending or MerchantAccessRequestStatus.Approved)
+                throw new ConflictException($"You already have a {existing.Status.ToString().ToLowerInvariant()} request for this merchant.");
+
+            // Previously rejected — let them try again.
+            existing.Status = MerchantAccessRequestStatus.Pending;
+            existing.CreatedAt = DateTimeOffset.UtcNow;
+            existing.RespondedAt = null;
+            await db.SaveChangesAsync();
+
+            return ToAccessRequestResponse(existing, merchant);
+        }
+
+        var newRequest = new MerchantAccessRequest
+        {
+            Id = Guid.NewGuid(),
+            MerchantId = merchant.Id,
+            CreatorId = creator.Id,
+            Status = MerchantAccessRequestStatus.Pending,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.MerchantAccessRequests.Add(newRequest);
+        await db.SaveChangesAsync();
+
+        return ToAccessRequestResponse(newRequest, merchant);
+    }
+
+    private static CreatorAccessRequestResponse ToAccessRequestResponse(MerchantAccessRequest a, Merchant? merchant = null)
+    {
+        var m = merchant ?? a.Merchant;
+        return new CreatorAccessRequestResponse(
+            a.Id, m.Id, m.Name, m.Slug, m.LogoUrl, a.Status.ToString(), a.CreatedAt, a.RespondedAt);
+    }
 }

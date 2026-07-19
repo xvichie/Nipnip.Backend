@@ -192,8 +192,9 @@ public class TrackingService(AppDbContext db, IEmailService emailService, ILogge
 
         if (!merchant.IsPublic)
         {
-            var isApproved = await db.MerchantApprovedCreators
-                .AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id);
+            var isApproved = await db.MerchantAccessRequests
+                .AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id
+                    && a.Status == MerchantAccessRequestStatus.Approved);
             if (!isApproved)
                 throw new ForbiddenException($"'{merchantSlug}' is a private store and hasn't approved '{creatorSlug}'.");
         }

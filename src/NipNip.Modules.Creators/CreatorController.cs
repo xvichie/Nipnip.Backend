@@ -63,4 +63,18 @@ public class CreatorController(CreatorService creatorService) : ControllerBase
         var clerkUserId = User.GetClerkUserId();
         return Ok(await creatorService.GetDashboardAsync(clerkUserId, from, to));
     }
+
+    [HttpGet("me/access-requests")]
+    public async Task<ActionResult<List<CreatorAccessRequestResponse>>> GetMyAccessRequests()
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await creatorService.GetMyAccessRequestsAsync(clerkUserId));
+    }
+
+    [HttpPost("me/access-requests")]
+    public async Task<ActionResult<CreatorAccessRequestResponse>> RequestMerchantAccess([FromBody] RequestMerchantAccessRequest request)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await creatorService.RequestMerchantAccessAsync(clerkUserId, request));
+    }
 }

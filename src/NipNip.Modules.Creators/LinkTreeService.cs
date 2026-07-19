@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using NipNip.Data;
 using NipNip.Data.Entities;
+using NipNip.Data.Enums;
 using NipNip.Modules.Creators.DTOs;
 using NipNip.Shared.Exceptions;
 
@@ -175,8 +176,9 @@ public class LinkTreeService(AppDbContext db)
 
         if (!merchant.IsPublic)
         {
-            var isApproved = await db.MerchantApprovedCreators
-                .AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == tree.CreatorId);
+            var isApproved = await db.MerchantAccessRequests
+                .AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == tree.CreatorId
+                    && a.Status == MerchantAccessRequestStatus.Approved);
             if (!isApproved)
                 throw new ForbiddenException("This merchant is private and hasn't approved you yet.");
         }

@@ -42,8 +42,8 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         var ids = merchantIds.ToList();
         if (ids.Count == 0) return [];
 
-        var approved = await db.MerchantApprovedCreators
-            .Where(a => a.CreatorId == creator.Id && ids.Contains(a.MerchantId))
+        var approved = await db.MerchantAccessRequests
+            .Where(a => a.CreatorId == creator.Id && ids.Contains(a.MerchantId) && a.Status == MerchantAccessRequestStatus.Approved)
             .Select(a => a.MerchantId)
             .ToListAsync();
 
@@ -106,6 +106,8 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         var merchant = await db.Merchants.FindAsync(id)
             ?? throw new NotFoundException("Merchant not found.");
 
+        var wasPrivate = !merchant.IsPublic;
+
         if (request.Name is not null)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -126,6 +128,8 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         if (request.LogoUrl is not null) merchant.LogoUrl = request.LogoUrl;
         if (request.NotificationEmail is not null) merchant.NotificationEmail = request.NotificationEmail;
         if (request.IsPublic.HasValue) merchant.IsPublic = request.IsPublic.Value;
+
+        if (wasPrivate && merchant.IsPublic) await ApproveAllPendingRequestsAsync(merchant.Id);
 
         await db.SaveChangesAsync();
         return merchant.ToDto();
@@ -223,6 +227,8 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         if (merchant.ClerkUserId != clerkUserId)
             throw new ForbiddenException("You can only update your own merchant profile.");
 
+        var wasPrivate = !merchant.IsPublic;
+
         if (request.Name is not null)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -244,30 +250,45 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         if (request.NotificationEmail is not null) merchant.NotificationEmail = request.NotificationEmail;
         if (request.IsPublic.HasValue) merchant.IsPublic = request.IsPublic.Value;
 
+        if (wasPrivate && merchant.IsPublic) await ApproveAllPendingRequestsAsync(merchant.Id);
+
         await db.SaveChangesAsync();
 
         return merchant.ToDto();
     }
 
-    // --- Approved creators (private-store allowlist) ---
+    // --- Access requests (private-store allowlist) ---
 
-    public async Task<List<ApprovedCreatorResponse>> GetApprovedCreatorsAsync(string clerkUserId)
+    private async Task ApproveAllPendingRequestsAsync(Guid merchantId)
+    {
+        var pending = await db.MerchantAccessRequests
+            .Where(a => a.MerchantId == merchantId && a.Status == MerchantAccessRequestStatus.Pending)
+            .ToListAsync();
+
+        foreach (var request in pending)
+        {
+            request.Status = MerchantAccessRequestStatus.Approved;
+            request.RespondedAt = DateTimeOffset.UtcNow;
+        }
+    }
+
+    public async Task<List<MerchantAccessRequestResponse>> GetAccessRequestsAsync(string clerkUserId)
     {
         var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
             ?? throw new NotFoundException("You don't have a merchant account.");
 
-        var approvals = await db.MerchantApprovedCreators
+        var requests = await db.MerchantAccessRequests
             .Where(a => a.MerchantId == merchant.Id)
             .Include(a => a.Creator)
-            .OrderBy(a => a.Creator.Name)
+            .OrderByDescending(a => a.CreatedAt)
             .ToListAsync();
 
-        return approvals
-            .Select(a => new ApprovedCreatorResponse(a.Creator.Id, a.Creator.Name, a.Creator.Slug, a.Creator.AvatarUrl))
-            .ToList();
+        return requests.Select(a => ToAccessRequestResponse(a)).ToList();
     }
 
-    public async Task<ApprovedCreatorResponse> AddApprovedCreatorAsync(string clerkUserId, AddApprovedCreatorRequest request)
+    // Merchant proactively adding a creator they already trust — approved immediately, no request
+    // step needed since the merchant themselves is the one calling this.
+    public async Task<MerchantAccessRequestResponse> AddApprovedCreatorAsync(string clerkUserId, AddApprovedCreatorRequest request)
     {
         var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
             ?? throw new NotFoundException("You don't have a merchant account.");
@@ -275,32 +296,47 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         var creator = await db.Creators.FindAsync(request.CreatorId)
             ?? throw new NotFoundException("Creator not found.");
 
-        if (await db.MerchantApprovedCreators.AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id))
-            throw new ConflictException("This creator is already approved.");
+        if (await db.MerchantAccessRequests.AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id))
+            throw new ConflictException("This creator already has a pending or existing request.");
 
-        db.MerchantApprovedCreators.Add(new MerchantApprovedCreator
+        var accessRequest = new MerchantAccessRequest
         {
             Id = Guid.NewGuid(),
             MerchantId = merchant.Id,
             CreatorId = creator.Id,
+            Status = MerchantAccessRequestStatus.Approved,
             CreatedAt = DateTimeOffset.UtcNow,
-        });
+            RespondedAt = DateTimeOffset.UtcNow,
+        };
+        db.MerchantAccessRequests.Add(accessRequest);
         await db.SaveChangesAsync();
 
-        return new ApprovedCreatorResponse(creator.Id, creator.Name, creator.Slug, creator.AvatarUrl);
+        return ToAccessRequestResponse(accessRequest, creator);
     }
 
-    public async Task RemoveApprovedCreatorAsync(string clerkUserId, Guid creatorId)
+    public async Task<MerchantAccessRequestResponse> RespondToAccessRequestAsync(string clerkUserId, Guid requestId, bool approve)
     {
-        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
-            ?? throw new NotFoundException("You don't have a merchant account.");
+        var accessRequest = await db.MerchantAccessRequests
+            .Include(a => a.Creator)
+            .Include(a => a.Merchant)
+            .FirstOrDefaultAsync(a => a.Id == requestId)
+            ?? throw new NotFoundException("Access request not found.");
 
-        var approval = await db.MerchantApprovedCreators
-            .FirstOrDefaultAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creatorId)
-            ?? throw new NotFoundException("This creator isn't on your approved list.");
+        if (accessRequest.Merchant.ClerkUserId != clerkUserId)
+            throw new ForbiddenException("You can only respond to your own store's access requests.");
 
-        db.MerchantApprovedCreators.Remove(approval);
+        accessRequest.Status = approve ? MerchantAccessRequestStatus.Approved : MerchantAccessRequestStatus.Rejected;
+        accessRequest.RespondedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
+
+        return ToAccessRequestResponse(accessRequest);
+    }
+
+    private static MerchantAccessRequestResponse ToAccessRequestResponse(MerchantAccessRequest a, Creator? creator = null)
+    {
+        var c = creator ?? a.Creator;
+        return new MerchantAccessRequestResponse(
+            a.Id, c.Id, c.Name, c.Slug, c.AvatarUrl, a.Status.ToString(), a.CreatedAt, a.RespondedAt);
     }
 
     public async Task<MerchantSnippetResponse> GetSnippetAsync(string clerkUserId, string apiBaseUrl)

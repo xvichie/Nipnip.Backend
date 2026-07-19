@@ -72,25 +72,31 @@ public class MerchantController(MerchantService merchantService) : ControllerBas
         return Ok(await merchantService.GetDashboardAsync(clerkUserId, from, to));
     }
 
-    [HttpGet("me/approved-creators")]
-    public async Task<ActionResult<List<ApprovedCreatorResponse>>> GetApprovedCreators()
+    [HttpGet("me/access-requests")]
+    public async Task<ActionResult<List<MerchantAccessRequestResponse>>> GetAccessRequests()
     {
         var clerkUserId = User.GetClerkUserId();
-        return Ok(await merchantService.GetApprovedCreatorsAsync(clerkUserId));
+        return Ok(await merchantService.GetAccessRequestsAsync(clerkUserId));
     }
 
-    [HttpPost("me/approved-creators")]
-    public async Task<ActionResult<ApprovedCreatorResponse>> AddApprovedCreator([FromBody] AddApprovedCreatorRequest request)
+    [HttpPost("me/access-requests")]
+    public async Task<ActionResult<MerchantAccessRequestResponse>> AddApprovedCreator([FromBody] AddApprovedCreatorRequest request)
     {
         var clerkUserId = User.GetClerkUserId();
         return Ok(await merchantService.AddApprovedCreatorAsync(clerkUserId, request));
     }
 
-    [HttpDelete("me/approved-creators/{creatorId:guid}")]
-    public async Task<ActionResult> RemoveApprovedCreator(Guid creatorId)
+    [HttpPut("me/access-requests/{id:guid}/approve")]
+    public async Task<ActionResult<MerchantAccessRequestResponse>> ApproveAccessRequest(Guid id)
     {
         var clerkUserId = User.GetClerkUserId();
-        await merchantService.RemoveApprovedCreatorAsync(clerkUserId, creatorId);
-        return NoContent();
+        return Ok(await merchantService.RespondToAccessRequestAsync(clerkUserId, id, approve: true));
+    }
+
+    [HttpPut("me/access-requests/{id:guid}/reject")]
+    public async Task<ActionResult<MerchantAccessRequestResponse>> RejectAccessRequest(Guid id)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await merchantService.RespondToAccessRequestAsync(clerkUserId, id, approve: false));
     }
 }

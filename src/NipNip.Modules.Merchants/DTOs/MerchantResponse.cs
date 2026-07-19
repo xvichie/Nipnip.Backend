@@ -20,11 +20,15 @@ public record MerchantResponse(
     DateTimeOffset CreatedAt
 );
 
-public record ApprovedCreatorResponse(
+public record MerchantAccessRequestResponse(
+    Guid Id,
     Guid CreatorId,
     string CreatorName,
     string CreatorSlug,
-    string? CreatorAvatarUrl
+    string? CreatorAvatarUrl,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? RespondedAt
 );
 
 public record AddApprovedCreatorRequest(Guid CreatorId);

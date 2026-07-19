@@ -4,9 +4,9 @@ using NipNip.Data.Entities;
 
 namespace NipNip.Data.Configurations;
 
-public class MerchantApprovedCreatorConfiguration : IEntityTypeConfiguration<MerchantApprovedCreator>
+public class MerchantAccessRequestConfiguration : IEntityTypeConfiguration<MerchantAccessRequest>
 {
-    public void Configure(EntityTypeBuilder<MerchantApprovedCreator> builder)
+    public void Configure(EntityTypeBuilder<MerchantAccessRequest> builder)
     {
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedOnAdd();
