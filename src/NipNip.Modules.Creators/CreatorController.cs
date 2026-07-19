@@ -10,7 +10,7 @@ namespace NipNip.Modules.Creators;
 [ApiController]
 [Route("api/creators")]
 [Authorize]
-public class CreatorController(CreatorService creatorService, LinkTreeService linkTreeService) : ControllerBase
+public class CreatorController(CreatorService creatorService) : ControllerBase
 {
     [HttpGet]
     [AllowAnonymous]
@@ -62,52 +62,5 @@ public class CreatorController(CreatorService creatorService, LinkTreeService li
     {
         var clerkUserId = User.GetClerkUserId();
         return Ok(await creatorService.GetDashboardAsync(clerkUserId, from, to));
-    }
-
-    // --- Link tree ---
-
-    [HttpGet("{slug}/linktree")]
-    [AllowAnonymous]
-    public async Task<ActionResult<LinkTreeResponse>> GetLinkTreeBySlug(string slug)
-    {
-        return Ok(await linkTreeService.GetBySlugAsync(slug));
-    }
-
-    [HttpGet("me/linktree")]
-    public async Task<ActionResult<LinkTreeResponse>> GetMyLinkTree()
-    {
-        var clerkUserId = User.GetClerkUserId();
-        return Ok(await linkTreeService.GetMeAsync(clerkUserId));
-    }
-
-    [HttpPost("me/linktree/items")]
-    public async Task<ActionResult<LinkTreeItemResponse>> AddLinkTreeItem([FromBody] AddLinkTreeItemRequest request)
-    {
-        var clerkUserId = User.GetClerkUserId();
-        return Ok(await linkTreeService.AddItemAsync(clerkUserId, request));
-    }
-
-    [HttpPut("me/linktree/items/{id:guid}")]
-    public async Task<ActionResult<LinkTreeItemResponse>> UpdateLinkTreeItem(
-        Guid id, [FromBody] UpdateLinkTreeItemRequest request)
-    {
-        var clerkUserId = User.GetClerkUserId();
-        return Ok(await linkTreeService.UpdateItemAsync(clerkUserId, id, request));
-    }
-
-    [HttpDelete("me/linktree/items/{id:guid}")]
-    public async Task<ActionResult> DeleteLinkTreeItem(Guid id)
-    {
-        var clerkUserId = User.GetClerkUserId();
-        await linkTreeService.RemoveItemAsync(clerkUserId, id);
-        return NoContent();
-    }
-
-    [HttpPut("me/linktree/reorder")]
-    public async Task<ActionResult> ReorderLinkTree([FromBody] ReorderLinkTreeItemsRequest request)
-    {
-        var clerkUserId = User.GetClerkUserId();
-        await linkTreeService.ReorderAsync(clerkUserId, request);
-        return NoContent();
     }
 }

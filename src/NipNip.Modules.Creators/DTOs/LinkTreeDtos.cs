@@ -10,12 +10,34 @@ public record LinkTreeItemResponse(
     int Position
 );
 
-public record LinkTreeResponse(
+public record LinkTreeSummaryResponse(
+    Guid Id,
+    string Name,
+    string Slug,
+    bool IsDefault,
+    int Position,
+    int ItemCount
+);
+
+public record LinkTreeDetailResponse(
+    Guid Id,
+    string Name,
+    string Slug,
+    bool IsDefault,
+    IReadOnlyList<LinkTreeItemResponse> Items
+);
+
+public record PublicLinkTreeResponse(
     string CreatorName,
     string CreatorSlug,
     string? CreatorAvatarUrl,
+    string TreeName,
     IReadOnlyList<LinkTreeItemResponse> Items
 );
+
+public record CreateLinkTreeRequest(string Name, string Slug);
+
+public record UpdateLinkTreeRequest(string? Name, string? Slug);
 
 public record AddLinkTreeItemRequest(Guid MerchantId, string? Label);
 

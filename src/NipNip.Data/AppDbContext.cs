@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Conversion> Conversions => Set<Conversion>();
     public DbSet<Payout> Payouts => Set<Payout>();
     public DbSet<DiscountCode> DiscountCodes => Set<DiscountCode>();
+    public DbSet<LinkTree> LinkTrees => Set<LinkTree>();
     public DbSet<LinkTreeItem> LinkTreeItems => Set<LinkTreeItem>();
 
     public DbSet<Store> Stores => Set<Store>();

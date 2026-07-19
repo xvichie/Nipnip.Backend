@@ -4,13 +4,13 @@ using NipNip.Data.Entities;
 
 namespace NipNip.Data.Configurations;
 
-public class LinkTreeItemConfiguration : IEntityTypeConfiguration<LinkTreeItem>
+public class LinkTreeConfiguration : IEntityTypeConfiguration<LinkTree>
 {
-    public void Configure(EntityTypeBuilder<LinkTreeItem> builder)
+    public void Configure(EntityTypeBuilder<LinkTree> builder)
     {
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedOnAdd();
 
-        builder.HasIndex(x => new { x.LinkTreeId, x.MerchantId }).IsUnique();
+        builder.HasIndex(x => x.Slug).IsUnique();
     }
 }
