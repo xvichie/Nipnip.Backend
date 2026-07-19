@@ -7,6 +7,7 @@ public static class CreatorServiceExtensions
     public static IServiceCollection AddCreatorModule(this IServiceCollection services)
     {
         services.AddScoped<CreatorService>();
+        services.AddScoped<LinkTreeService>();
         return services;
     }
 }
