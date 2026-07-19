@@ -322,9 +322,29 @@ public class LinkTreeService(AppDbContext db)
             throw new ArgumentException("Slug must be lowercase alphanumeric with optional hyphens and cannot start with a hyphen.");
     }
 
+    // Common informal Georgian->Latin transliteration (matches how Georgians typically romanize by
+    // hand — e.g. პ/ფ both -> p, ტ/თ both -> t — not the strict reversible academic scheme).
+    // Without this, Georgian names would just have every letter stripped as "non-alphanumeric".
+    private static readonly Dictionary<char, string> GeorgianToLatin = new()
+    {
+        ['ა'] = "a", ['ბ'] = "b", ['გ'] = "g", ['დ'] = "d", ['ე'] = "e", ['ვ'] = "v", ['ზ'] = "z",
+        ['თ'] = "t", ['ი'] = "i", ['კ'] = "k", ['ლ'] = "l", ['მ'] = "m", ['ნ'] = "n", ['ო'] = "o",
+        ['პ'] = "p", ['ჟ'] = "zh", ['რ'] = "r", ['ს'] = "s", ['ტ'] = "t", ['უ'] = "u", ['ფ'] = "p",
+        ['ქ'] = "k", ['ღ'] = "gh", ['ყ'] = "q", ['შ'] = "sh", ['ჩ'] = "ch", ['ც'] = "ts", ['ძ'] = "dz",
+        ['წ'] = "ts", ['ჭ'] = "ch", ['ხ'] = "kh", ['ჯ'] = "j", ['ჰ'] = "h",
+    };
+
+    private static string Transliterate(string name)
+    {
+        var builder = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name)
+            builder.Append(GeorgianToLatin.TryGetValue(c, out var latin) ? latin : c.ToString());
+        return builder.ToString();
+    }
+
     private static string Slugify(string name)
     {
-        var slug = NonAlphanumericRegex.Replace(name.Trim().ToLowerInvariant(), "-").Trim('-');
+        var slug = NonAlphanumericRegex.Replace(Transliterate(name).Trim().ToLowerInvariant(), "-").Trim('-');
         return string.IsNullOrEmpty(slug) ? "link-tree" : slug;
     }
 
