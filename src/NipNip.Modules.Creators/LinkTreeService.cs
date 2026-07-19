@@ -10,6 +10,7 @@ namespace NipNip.Modules.Creators;
 public class LinkTreeService(AppDbContext db)
 {
     private static readonly Regex SlugRegex = new(@"^[a-z0-9][a-z0-9-]*$", RegexOptions.Compiled);
+    private static readonly Regex NonAlphanumericRegex = new(@"[^a-z0-9]+", RegexOptions.Compiled);
 
     // --- Public reads ---
 
@@ -83,10 +84,6 @@ public class LinkTreeService(AppDbContext db)
             ?? throw new NotFoundException("You don't have a creator account.");
 
         ValidateName(request.Name);
-        ValidateSlug(request.Slug);
-
-        if (await db.LinkTrees.AnyAsync(t => t.Slug == request.Slug))
-            throw new ConflictException($"Slug '{request.Slug}' is already taken.");
 
         var maxPosition = await db.LinkTrees
             .Where(t => t.CreatorId == creator.Id)
@@ -98,7 +95,7 @@ public class LinkTreeService(AppDbContext db)
             Id = Guid.NewGuid(),
             CreatorId = creator.Id,
             Name = request.Name.Trim(),
-            Slug = request.Slug,
+            Slug = await GenerateUniqueSlugAsync(request.Name),
             IsDefault = false,
             Position = maxPosition + 1,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -323,5 +320,23 @@ public class LinkTreeService(AppDbContext db)
     {
         if (string.IsNullOrWhiteSpace(slug) || !SlugRegex.IsMatch(slug))
             throw new ArgumentException("Slug must be lowercase alphanumeric with optional hyphens and cannot start with a hyphen.");
+    }
+
+    private static string Slugify(string name)
+    {
+        var slug = NonAlphanumericRegex.Replace(name.Trim().ToLowerInvariant(), "-").Trim('-');
+        return string.IsNullOrEmpty(slug) ? "link-tree" : slug;
+    }
+
+    private async Task<string> GenerateUniqueSlugAsync(string name)
+    {
+        var baseSlug = Slugify(name);
+        var slug = baseSlug;
+        var suffix = 1;
+
+        while (await db.LinkTrees.AnyAsync(t => t.Slug == slug))
+            slug = $"{baseSlug}-{++suffix}";
+
+        return slug;
     }
 }

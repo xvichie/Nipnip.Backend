@@ -35,7 +35,7 @@ public record PublicLinkTreeResponse(
     IReadOnlyList<LinkTreeItemResponse> Items
 );
 
-public record CreateLinkTreeRequest(string Name, string Slug);
+public record CreateLinkTreeRequest(string Name);
 
 public record UpdateLinkTreeRequest(string? Name, string? Slug);
 
