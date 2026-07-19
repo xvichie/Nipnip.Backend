@@ -173,6 +173,14 @@ public class LinkTreeService(AppDbContext db)
         var merchant = await db.Merchants.FindAsync(request.MerchantId)
             ?? throw new NotFoundException("Merchant not found.");
 
+        if (!merchant.IsPublic)
+        {
+            var isApproved = await db.MerchantApprovedCreators
+                .AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == tree.CreatorId);
+            if (!isApproved)
+                throw new ForbiddenException("This merchant is private and hasn't approved you yet.");
+        }
+
         if (await db.LinkTreeItems.AnyAsync(i => i.LinkTreeId == tree.Id && i.MerchantId == request.MerchantId))
             throw new ConflictException("This merchant is already on this link tree.");
 

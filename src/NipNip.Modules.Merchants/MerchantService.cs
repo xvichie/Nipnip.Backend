@@ -30,6 +30,26 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         return await db.Creators.AnyAsync(c => c.ClerkUserId == callerClerkUserId && c.IsTest);
     }
 
+    // Which of the given (private) merchants the caller — if they're a creator — is approved for.
+    // Public merchants don't need this; callers should OR it with m.IsPublic.
+    private async Task<HashSet<Guid>> GetApprovedMerchantIdsForCallerAsync(string? callerClerkUserId, IEnumerable<Guid> merchantIds)
+    {
+        if (callerClerkUserId is null) return [];
+
+        var creator = await db.Creators.FirstOrDefaultAsync(c => c.ClerkUserId == callerClerkUserId);
+        if (creator is null) return [];
+
+        var ids = merchantIds.ToList();
+        if (ids.Count == 0) return [];
+
+        var approved = await db.MerchantApprovedCreators
+            .Where(a => a.CreatorId == creator.Id && ids.Contains(a.MerchantId))
+            .Select(a => a.MerchantId)
+            .ToListAsync();
+
+        return approved.ToHashSet();
+    }
+
     public async Task<MerchantResponse> RegisterAsync(string clerkUserId, RegisterMerchantRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -105,6 +125,7 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         if (request.Description is not null) merchant.Description = request.Description;
         if (request.LogoUrl is not null) merchant.LogoUrl = request.LogoUrl;
         if (request.NotificationEmail is not null) merchant.NotificationEmail = request.NotificationEmail;
+        if (request.IsPublic.HasValue) merchant.IsPublic = request.IsPublic.Value;
 
         await db.SaveChangesAsync();
         return merchant.ToDto();
@@ -139,7 +160,9 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
             .OrderBy(m => m.Name)
             .ToPaginatedResultAsync(request);
 
-        return result.Map(m => m.ToDto());
+        var approvedIds = await GetApprovedMerchantIdsForCallerAsync(callerClerkUserId, result.Items.Select(m => m.Id));
+
+        return result.Map(m => m.ToDto(m.IsPublic || approvedIds.Contains(m.Id)));
     }
 
     public async Task<List<MerchantResponse>> GetHighlightedAsync(string? callerClerkUserId)
@@ -155,7 +178,10 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
             .Where(m => canSeeTest || !m.IsTest)
             .OrderBy(m => m.Name)
             .ToListAsync();
-        return merchants.Select(m => m.ToDto()).ToList();
+
+        var approvedIds = await GetApprovedMerchantIdsForCallerAsync(callerClerkUserId, merchants.Select(m => m.Id));
+
+        return merchants.Select(m => m.ToDto(m.IsPublic || approvedIds.Contains(m.Id))).ToList();
     }
 
     public async Task<MerchantResponse> ToggleTestAsync(Guid id)
@@ -176,14 +202,17 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         return merchant.ToDto();
     }
 
-    public async Task<MerchantResponse> GetBySlugAsync(string slug)
+    public async Task<MerchantResponse> GetBySlugAsync(string slug, string? callerClerkUserId)
     {
         var merchant = await db.Merchants
             .FirstOrDefaultAsync(m => m.Slug == slug && m.IsActive
                 && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             ?? throw new NotFoundException($"Merchant '{slug}' not found.");
 
-        return merchant.ToDto();
+        if (merchant.IsPublic) return merchant.ToDto();
+
+        var approvedIds = await GetApprovedMerchantIdsForCallerAsync(callerClerkUserId, [merchant.Id]);
+        return merchant.ToDto(approvedIds.Contains(merchant.Id));
     }
 
     public async Task<MerchantResponse> UpdateAsync(Guid id, string clerkUserId, UpdateMerchantRequest request)
@@ -213,10 +242,65 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         if (request.Description is not null) merchant.Description = request.Description;
         if (request.LogoUrl is not null) merchant.LogoUrl = request.LogoUrl;
         if (request.NotificationEmail is not null) merchant.NotificationEmail = request.NotificationEmail;
+        if (request.IsPublic.HasValue) merchant.IsPublic = request.IsPublic.Value;
 
         await db.SaveChangesAsync();
 
         return merchant.ToDto();
+    }
+
+    // --- Approved creators (private-store allowlist) ---
+
+    public async Task<List<ApprovedCreatorResponse>> GetApprovedCreatorsAsync(string clerkUserId)
+    {
+        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a merchant account.");
+
+        var approvals = await db.MerchantApprovedCreators
+            .Where(a => a.MerchantId == merchant.Id)
+            .Include(a => a.Creator)
+            .OrderBy(a => a.Creator.Name)
+            .ToListAsync();
+
+        return approvals
+            .Select(a => new ApprovedCreatorResponse(a.Creator.Id, a.Creator.Name, a.Creator.Slug, a.Creator.AvatarUrl))
+            .ToList();
+    }
+
+    public async Task<ApprovedCreatorResponse> AddApprovedCreatorAsync(string clerkUserId, AddApprovedCreatorRequest request)
+    {
+        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a merchant account.");
+
+        var creator = await db.Creators.FindAsync(request.CreatorId)
+            ?? throw new NotFoundException("Creator not found.");
+
+        if (await db.MerchantApprovedCreators.AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id))
+            throw new ConflictException("This creator is already approved.");
+
+        db.MerchantApprovedCreators.Add(new MerchantApprovedCreator
+        {
+            Id = Guid.NewGuid(),
+            MerchantId = merchant.Id,
+            CreatorId = creator.Id,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        return new ApprovedCreatorResponse(creator.Id, creator.Name, creator.Slug, creator.AvatarUrl);
+    }
+
+    public async Task RemoveApprovedCreatorAsync(string clerkUserId, Guid creatorId)
+    {
+        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a merchant account.");
+
+        var approval = await db.MerchantApprovedCreators
+            .FirstOrDefaultAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creatorId)
+            ?? throw new NotFoundException("This creator isn't on your approved list.");
+
+        db.MerchantApprovedCreators.Remove(approval);
+        await db.SaveChangesAsync();
     }
 
     public async Task<MerchantSnippetResponse> GetSnippetAsync(string clerkUserId, string apiBaseUrl)

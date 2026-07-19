@@ -7,5 +7,6 @@ public record UpdateMerchantRequest(
     string? Description,
     string? LogoUrl,
     decimal? CommissionPercent,
-    string? NotificationEmail
+    string? NotificationEmail,
+    bool? IsPublic
 );

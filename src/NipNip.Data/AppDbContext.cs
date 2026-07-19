@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DiscountCode> DiscountCodes => Set<DiscountCode>();
     public DbSet<LinkTree> LinkTrees => Set<LinkTree>();
     public DbSet<LinkTreeItem> LinkTreeItems => Set<LinkTreeItem>();
+    public DbSet<MerchantApprovedCreator> MerchantApprovedCreators => Set<MerchantApprovedCreator>();
 
     public DbSet<Store> Stores => Set<Store>();
     public DbSet<Category> Categories => Set<Category>();

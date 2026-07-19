@@ -25,6 +25,7 @@ public class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         builder.Property(m => m.CommissionPercent).HasColumnType("decimal(18,2)");
         builder.Property(m => m.Balance).HasColumnType("decimal(18,2)");
         builder.Property(m => m.IsActive).HasDefaultValue(true);
+        builder.Property(m => m.IsPublic).HasDefaultValue(true);
 
         builder.HasMany(m => m.Clicks)
             .WithOne(c => c.Merchant)

@@ -15,5 +15,16 @@ public record MerchantResponse(
     bool IsActive,
     bool IsHighlighted,
     bool IsTest,
+    bool IsPublic,
+    bool IsApprovedForViewer,
     DateTimeOffset CreatedAt
 );
+
+public record ApprovedCreatorResponse(
+    Guid CreatorId,
+    string CreatorName,
+    string CreatorSlug,
+    string? CreatorAvatarUrl
+);
+
+public record AddApprovedCreatorRequest(Guid CreatorId);

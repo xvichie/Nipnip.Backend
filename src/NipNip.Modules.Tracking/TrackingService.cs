@@ -190,6 +190,14 @@ public class TrackingService(AppDbContext db, IEmailService emailService, ILogge
             .FirstOrDefaultAsync(m => m.Slug == merchantSlug && m.IsActive)
             ?? throw new NotFoundException($"Merchant '{merchantSlug}' not found.");
 
+        if (!merchant.IsPublic)
+        {
+            var isApproved = await db.MerchantApprovedCreators
+                .AnyAsync(a => a.MerchantId == merchant.Id && a.CreatorId == creator.Id);
+            if (!isApproved)
+                throw new ForbiddenException($"'{merchantSlug}' is a private store and hasn't approved '{creatorSlug}'.");
+        }
+
         var refCode = $"{creatorSlug}_{merchantSlug}";
 
         // A merchant with affiliate tracking enabled on their NipNip storefront takes priority

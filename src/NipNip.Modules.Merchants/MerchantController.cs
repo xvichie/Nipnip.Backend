@@ -37,7 +37,7 @@ public class MerchantController(MerchantService merchantService) : ControllerBas
     [AllowAnonymous]
     public async Task<ActionResult<MerchantResponse>> GetBySlug(string slug)
     {
-        return Ok(await merchantService.GetBySlugAsync(slug));
+        return Ok(await merchantService.GetBySlugAsync(slug, User.TryGetClerkUserId()));
     }
 
     [HttpPost]
@@ -70,5 +70,27 @@ public class MerchantController(MerchantService merchantService) : ControllerBas
     {
         var clerkUserId = User.GetClerkUserId();
         return Ok(await merchantService.GetDashboardAsync(clerkUserId, from, to));
+    }
+
+    [HttpGet("me/approved-creators")]
+    public async Task<ActionResult<List<ApprovedCreatorResponse>>> GetApprovedCreators()
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await merchantService.GetApprovedCreatorsAsync(clerkUserId));
+    }
+
+    [HttpPost("me/approved-creators")]
+    public async Task<ActionResult<ApprovedCreatorResponse>> AddApprovedCreator([FromBody] AddApprovedCreatorRequest request)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await merchantService.AddApprovedCreatorAsync(clerkUserId, request));
+    }
+
+    [HttpDelete("me/approved-creators/{creatorId:guid}")]
+    public async Task<ActionResult> RemoveApprovedCreator(Guid creatorId)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        await merchantService.RemoveApprovedCreatorAsync(clerkUserId, creatorId);
+        return NoContent();
     }
 }
