@@ -99,4 +99,18 @@ public class MerchantController(MerchantService merchantService) : ControllerBas
         var clerkUserId = User.GetClerkUserId();
         return Ok(await merchantService.RespondToAccessRequestAsync(clerkUserId, id, approve: false));
     }
+
+    [HttpGet("me/ai-image-usage")]
+    public async Task<ActionResult<AiImageUsageResponse>> GetAiImageUsage()
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await merchantService.GetAiImageUsageAsync(clerkUserId));
+    }
+
+    [HttpPost("me/ai-image-usage/consume")]
+    public async Task<ActionResult<AiImageUsageResponse>> ConsumeAiImageUsage()
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await merchantService.ConsumeAiImageGenerationAsync(clerkUserId));
+    }
 }

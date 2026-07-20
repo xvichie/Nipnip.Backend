@@ -20,6 +20,11 @@ public class Merchant
     public bool IsPublic { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
 
+    // AI product-photo generation usage, reset whenever AiImageGenerationsPeriod no longer
+    // matches the current "yyyy-MM" — see MerchantService.ConsumeAiImageGenerationAsync.
+    public int AiImageGenerationsUsed { get; set; }
+    public string AiImageGenerationsPeriod { get; set; } = "";
+
     public ICollection<Click> Clicks { get; set; } = [];
     public ICollection<Conversion> Conversions { get; set; } = [];
 }

@@ -25,6 +25,7 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
             InsufficientBalanceException => (StatusCodes.Status422UnprocessableEntity, "Unprocessable Entity"),
             ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
+            QuotaExceededException => (StatusCodes.Status429TooManyRequests, "Too Many Requests"),
             ArgumentException => (StatusCodes.Status400BadRequest, "Bad Request"),
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error"),
         };

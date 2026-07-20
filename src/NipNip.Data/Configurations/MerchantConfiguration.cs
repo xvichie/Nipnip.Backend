@@ -27,6 +27,9 @@ public class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         builder.Property(m => m.IsActive).HasDefaultValue(true);
         builder.Property(m => m.IsPublic).HasDefaultValue(true);
 
+        builder.Property(m => m.AiImageGenerationsUsed).HasDefaultValue(0);
+        builder.Property(m => m.AiImageGenerationsPeriod).HasDefaultValue("").HasMaxLength(7);
+
         builder.HasMany(m => m.Clicks)
             .WithOne(c => c.Merchant)
             .HasForeignKey(c => c.MerchantId);

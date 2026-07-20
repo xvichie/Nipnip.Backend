@@ -380,6 +380,52 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         </script>
         """;
 
+    // --- AI product-photo generation quota ---
+
+    private const int DefaultAiImageGenerationMonthlyLimit = 40;
+
+    private int AiImageGenerationMonthlyLimit =>
+        configuration.GetValue("AiImageGeneration:MonthlyLimit", DefaultAiImageGenerationMonthlyLimit);
+
+    // Resets the counter in-memory (caller still needs to SaveChangesAsync) whenever the
+    // stored period no longer matches the current calendar month.
+    private void ResetAiImageUsageIfNewPeriod(Merchant merchant, string currentPeriod)
+    {
+        if (merchant.AiImageGenerationsPeriod == currentPeriod) return;
+        merchant.AiImageGenerationsPeriod = currentPeriod;
+        merchant.AiImageGenerationsUsed = 0;
+    }
+
+    public async Task<AiImageUsageResponse> GetAiImageUsageAsync(string clerkUserId)
+    {
+        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a merchant account.");
+
+        var currentPeriod = DateTimeOffset.UtcNow.ToString("yyyy-MM");
+        var used = merchant.AiImageGenerationsPeriod == currentPeriod ? merchant.AiImageGenerationsUsed : 0;
+        return new AiImageUsageResponse(used, AiImageGenerationMonthlyLimit, currentPeriod);
+    }
+
+    // Atomically checks-and-increments — called by the frontend right before it pays for an
+    // actual Gemini generation, so a merchant can never generate past their monthly cap.
+    public async Task<AiImageUsageResponse> ConsumeAiImageGenerationAsync(string clerkUserId)
+    {
+        var merchant = await db.Merchants.FirstOrDefaultAsync(m => m.ClerkUserId == clerkUserId)
+            ?? throw new NotFoundException("You don't have a merchant account.");
+
+        var currentPeriod = DateTimeOffset.UtcNow.ToString("yyyy-MM");
+        ResetAiImageUsageIfNewPeriod(merchant, currentPeriod);
+
+        var limit = AiImageGenerationMonthlyLimit;
+        if (merchant.AiImageGenerationsUsed >= limit)
+            throw new QuotaExceededException($"You've used all {limit} AI photo generations for this month.");
+
+        merchant.AiImageGenerationsUsed++;
+        await db.SaveChangesAsync();
+
+        return new AiImageUsageResponse(merchant.AiImageGenerationsUsed, limit, currentPeriod);
+    }
+
     public async Task<MerchantDashboardResponse> GetDashboardAsync(
         string clerkUserId,
         DateTimeOffset? from,

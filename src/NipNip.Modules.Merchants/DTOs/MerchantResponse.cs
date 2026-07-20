@@ -32,3 +32,5 @@ public record MerchantAccessRequestResponse(
 );
 
 public record AddApprovedCreatorRequest(Guid CreatorId);
+
+public record AiImageUsageResponse(int Used, int Limit, string Period);
