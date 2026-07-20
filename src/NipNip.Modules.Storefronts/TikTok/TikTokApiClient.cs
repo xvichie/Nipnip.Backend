@@ -97,6 +97,10 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
                 description,
                 privacy_level = privacyLevel,
                 disable_comment = false,
+                // Required commercial-content disclosure for Direct Post. Merchants are always
+                // publishing photos of their own products/store, never paid third-party content.
+                brand_content_toggle = false,
+                brand_organic_toggle = true,
             },
             source_info = new
             {
