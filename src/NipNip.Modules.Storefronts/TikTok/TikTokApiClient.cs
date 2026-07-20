@@ -6,7 +6,7 @@ using NipNip.Shared.Exceptions;
 
 namespace NipNip.Modules.Storefronts.TikTok;
 
-public record TikTokTokenResult(string AccessToken, string RefreshToken, int ExpiresInSeconds, string OpenId);
+public record TikTokTokenResult(string AccessToken, string RefreshToken, int ExpiresInSeconds, string OpenId, string? Scope);
 
 public record TikTokUserInfo(string DisplayName, string? AvatarUrl);
 
@@ -53,7 +53,8 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
             node["access_token"]!.GetValue<string>(),
             node["refresh_token"]!.GetValue<string>(),
             node["expires_in"]!.GetValue<int>(),
-            node["open_id"]!.GetValue<string>()
+            node["open_id"]!.GetValue<string>(),
+            node["scope"]?.GetValue<string>()
         );
     }
 

@@ -61,6 +61,7 @@ public class TikTokConnectionService(
                 ?? throw new NotFoundException("Store not found.");
 
             var token = await tiktok.ExchangeCodeAsync(code);
+            logger.LogInformation("TikTok OAuth granted scope: {Scope}", token.Scope);
             var userInfo = await tiktok.GetUserInfoAsync(token.AccessToken);
 
             store.TikTokOpenId = token.OpenId;
