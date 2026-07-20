@@ -17,6 +17,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.Phone).IsRequired();
         builder.Property(o => o.Address).IsRequired();
         builder.Property(o => o.Total).HasColumnType("decimal(18,2)");
+        builder.Property(o => o.QuickShipperDeliveryFee).HasColumnType("decimal(18,2)");
         builder.Property(o => o.Source).HasDefaultValue(OrderSource.Storefront);
 
         builder.HasMany(o => o.Items)

@@ -25,5 +25,6 @@ public record OrderResponse(
     decimal Total,
     decimal ShippingFee,
     string? ShippingZoneName,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    string? RedirectUrl = null
 );

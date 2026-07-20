@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720155044_AddFlittPaymentIntegration")]
+    partial class AddFlittPaymentIntegration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1113,24 +1116,6 @@ namespace NipNip.Data.Migrations
                     b.Property<string>("ThemeId")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<string>("TikTokAccessTokenEncrypted")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("TikTokConnectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TikTokDisplayName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TikTokOpenId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TikTokRefreshTokenEncrypted")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("TikTokTokenExpiresAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

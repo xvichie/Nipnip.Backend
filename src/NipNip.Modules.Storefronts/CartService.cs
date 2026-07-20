@@ -6,13 +6,19 @@ using NipNip.Data.Entities;
 using NipNip.Data.Enums;
 using NipNip.Modules.Storefronts.DTOs;
 using NipNip.Modules.Storefronts.Extensions;
+using NipNip.Modules.Storefronts.Flitt;
 using NipNip.Modules.Tracking;
 using NipNip.Shared.Email;
 using NipNip.Shared.Exceptions;
 
 namespace NipNip.Modules.Storefronts;
 
-public class CartService(AppDbContext db, IEmailService emailService, TrackingService trackingService, ILogger<CartService> logger)
+public class CartService(
+    AppDbContext db,
+    IEmailService emailService,
+    TrackingService trackingService,
+    FlittService flittService,
+    ILogger<CartService> logger)
 {
     public async Task<CartResponse> GetCartAsync(string slug, string? sessionId)
     {
@@ -175,7 +181,7 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
             throw new ArgumentException("Address is required.");
 
         if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var paymentMethod))
-            throw new ArgumentException("Payment method must be 'CashOnDelivery' or 'BankTransfer'.");
+            throw new ArgumentException("Payment method must be 'CashOnDelivery', 'BankTransfer', or 'Flitt'.");
 
         var cart = await GetOrCreateCartAsync(slug, sessionId);
 
@@ -183,6 +189,9 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
             throw new ArgumentException("Cart is empty.");
 
         var store = await db.Stores.AsNoTracking().FirstOrDefaultAsync(s => s.Id == cart.StoreId);
+
+        if (paymentMethod == PaymentMethod.Flitt && store is null)
+            throw new NotFoundException("Store not found.");
 
         var order = new Order
         {
@@ -227,9 +236,22 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
 
         db.Orders.Add(order);
         db.OrderItems.AddRange(orderItems);
-        db.CartItems.RemoveRange(cart.Items);
+
+        // Flitt orders aren't "placed" yet — the customer still has to complete a hosted
+        // payment. The cart, confirmation email, and affiliate conversion all wait until the
+        // signed callback confirms payment (FlittService.FinalizeApprovedOrderAsync), so an
+        // abandoned/declined payment doesn't lose the customer's cart or fire a false conversion.
+        if (paymentMethod != PaymentMethod.Flitt)
+            db.CartItems.RemoveRange(cart.Items);
 
         await db.SaveChangesAsync();
+
+        if (paymentMethod == PaymentMethod.Flitt)
+        {
+            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
+            var checkoutUrl = await flittService.CreateCheckoutSessionAsync(order, store!, merchantData);
+            return order.ToDto() with { RedirectUrl = checkoutUrl };
+        }
 
         if (store is { AffiliateEnabled: true })
         {
@@ -267,6 +289,15 @@ public class CartService(AppDbContext db, IEmailService emailService, TrackingSe
                 logger.LogError(ex, "Failed to send order confirmation email to {Email}", order.Email);
             }
         }
+
+        return order.ToDto();
+    }
+
+    public async Task<OrderResponse> GetOrderStatusAsync(string slug, Guid orderId)
+    {
+        var order = await db.Orders
+            .FirstOrDefaultAsync(o => o.Id == orderId && o.Store.Slug == slug)
+            ?? throw new NotFoundException("Order not found.");
 
         return order.ToDto();
     }

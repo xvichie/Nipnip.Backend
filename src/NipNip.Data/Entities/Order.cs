@@ -21,6 +21,15 @@ public class Order
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? PaymentConfirmedAt { get; set; }
 
+    // Set once a QuickShipper delivery order has been created for this order.
+    public int? QuickShipperOrderId { get; set; }
+    public string? QuickShipperStatus { get; set; }
+    public string? QuickShipperTrackingUrl { get; set; }
+    public decimal? QuickShipperDeliveryFee { get; set; }
+
+    // Set once a Flitt checkout session has been created for this order (PaymentMethod.Flitt).
+    public long? FlittPaymentId { get; set; }
+
     // Snapshot of the originating Conversation's cumulative token usage at the moment
     // this order was drafted — only set for Source == OrderSource.AiAgent. Lets
     // cost-per-order be queried without joining back through conversation history.

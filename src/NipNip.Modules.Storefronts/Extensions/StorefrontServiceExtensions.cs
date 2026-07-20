@@ -2,6 +2,9 @@ using Anthropic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NipNip.Modules.Storefronts.AiAgent;
+using NipNip.Modules.Storefronts.Flitt;
+using NipNip.Modules.Storefronts.QuickShipper;
+using NipNip.Modules.Storefronts.TikTok;
 using NipNip.Shared.Crypto;
 
 namespace NipNip.Modules.Storefronts.Extensions;
@@ -14,6 +17,9 @@ public static class StorefrontServiceExtensions
         services.AddOptions<FacebookOptions>().BindConfiguration("Facebook");
         services.AddOptions<AnthropicOptions>().BindConfiguration("Anthropic");
         services.AddOptions<VoyageOptions>().BindConfiguration("Voyage");
+        services.AddOptions<QuickShipperOptions>().BindConfiguration("QuickShipper");
+        services.AddOptions<FlittOptions>().BindConfiguration("Flitt");
+        services.AddOptions<TikTokOptions>().BindConfiguration("TikTok");
         services.AddSingleton(sp => new AesStringProtector(sp.GetRequiredService<IOptions<FacebookOptions>>().Value.TokenEncryptionKey));
         services.AddSingleton(sp => new AnthropicClient { ApiKey = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value.ApiKey });
         services.AddScoped<VercelDomainService>();
@@ -21,6 +27,13 @@ public static class StorefrontServiceExtensions
         services.AddScoped<VoyageClient>();
         services.AddScoped<FacebookConnectionService>();
         services.AddScoped<InstagramConnectionService>();
+        services.AddScoped<QuickShipperAuthClient>();
+        services.AddScoped<QuickShipperOrderClient>();
+        services.AddScoped<QuickShipperService>();
+        services.AddScoped<FlittApiClient>();
+        services.AddScoped<FlittService>();
+        services.AddScoped<TikTokApiClient>();
+        services.AddScoped<TikTokConnectionService>();
         services.AddScoped<StoreService>();
         services.AddScoped<CategoryService>();
         services.AddScoped<StorePageService>();

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720144454_AddQuickShipperIntegration")]
+    partial class AddQuickShipperIntegration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -680,9 +683,6 @@ namespace NipNip.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long?>("FlittPaymentId")
-                        .HasColumnType("bigint");
-
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
 
@@ -1049,15 +1049,6 @@ namespace NipNip.Data.Migrations
                     b.Property<string>("FacebookPageName")
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("FlittConnectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FlittMerchantId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FlittSecretKeyEncrypted")
-                        .HasColumnType("text");
-
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1113,24 +1104,6 @@ namespace NipNip.Data.Migrations
                     b.Property<string>("ThemeId")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<string>("TikTokAccessTokenEncrypted")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("TikTokConnectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TikTokDisplayName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TikTokOpenId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TikTokRefreshTokenEncrypted")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("TikTokTokenExpiresAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

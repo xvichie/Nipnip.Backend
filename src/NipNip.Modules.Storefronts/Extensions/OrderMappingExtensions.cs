@@ -53,6 +53,10 @@ public static class OrderMappingExtensions
             order.Notes
                 .OrderBy(n => n.CreatedAt)
                 .Select(n => new OrderNoteResponse(n.Id, n.Content, n.CreatedAt))
-                .ToList()
+                .ToList(),
+            order.QuickShipperOrderId,
+            order.QuickShipperStatus,
+            order.QuickShipperTrackingUrl,
+            order.QuickShipperDeliveryFee
         );
 }

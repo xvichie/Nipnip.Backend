@@ -29,7 +29,11 @@ public record OrderDetailResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset? PaymentConfirmedAt,
     List<OrderItemResponse> Items,
-    List<OrderNoteResponse> Notes
+    List<OrderNoteResponse> Notes,
+    int? QuickShipperOrderId,
+    string? QuickShipperStatus,
+    string? QuickShipperTrackingUrl,
+    decimal? QuickShipperDeliveryFee
 );
 
 public record UpdateOrderStatusRequest(string Status);
