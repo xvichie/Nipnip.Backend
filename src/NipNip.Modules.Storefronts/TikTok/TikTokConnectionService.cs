@@ -112,14 +112,23 @@ public class TikTokConnectionService(
 
     public async Task<TikTokPublishResponse> PublishProductAsync(string clerkUserId, Guid productId, TikTokPublishRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Title))
-            throw new ArgumentException("Title is required.");
-
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
         var product = await productService.GetOwnProductAsync(clerkUserId, productId);
         var imageUrls = product.Images.OrderBy(i => i.SortOrder).Take(MaxPublishImages).Select(i => i.Url).ToList();
 
-        return await PublishAsync(store, imageUrls, request.Title, request.Description, request.AutoAddMusic);
+        // Both fall back to the same defaults the preview endpoint shows, so the "automatic
+        // sharing on create" flow (which has no preview step to seed a title/description from)
+        // still gets a sensible post instead of requiring the merchant to type one first.
+        var title = string.IsNullOrWhiteSpace(request.Title)
+            ? (product.Name.Length > 90 ? product.Name[..90] : product.Name)
+            : request.Title.Trim();
+        var description = string.IsNullOrWhiteSpace(request.Description)
+            ? ProductPostMessageBuilder.Build(product, store)
+            : request.Description.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Hashtags))
+            description = $"{description}\n\n{request.Hashtags.Trim()}";
+
+        return await PublishAsync(store, imageUrls, title, description, request.AutoAddMusic);
     }
 
     // Ad-hoc publish path used by the Social Post Creator tool — the source image isn't tied
