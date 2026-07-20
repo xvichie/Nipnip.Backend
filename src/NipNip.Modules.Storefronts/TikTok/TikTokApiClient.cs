@@ -13,6 +13,8 @@ public record TikTokUserInfo(string DisplayName, string? AvatarUrl);
 
 public record TikTokCreatorInfo(List<string> PrivacyLevelOptions, string? CreatorNickname);
 
+public record TikTokPublishStatus(string Status, string? FailReason);
+
 public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikTokOptions> options, ILogger<TikTokApiClient> logger)
 {
     private const string BaseUrl = "https://open.tiktokapis.com";
@@ -121,7 +123,7 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
             ?? throw new ArgumentException("TikTok did not return a publish id.");
     }
 
-    public async Task<string> GetPublishStatusAsync(string accessToken, string publishId)
+    public async Task<TikTokPublishStatus> GetPublishStatusAsync(string accessToken, string publishId)
     {
         var client = CreateJsonClient(accessToken);
         var response = await client.PostAsync(
@@ -129,7 +131,10 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
             new StringContent(JsonSerializer.Serialize(new { publish_id = publishId }), Encoding.UTF8, "application/json"));
         var node = await ParseAsync(response, "Could not check the TikTok post's status.");
 
-        return node["data"]?["status"]?.GetValue<string>() ?? "UNKNOWN";
+        return new TikTokPublishStatus(
+            node["data"]?["status"]?.GetValue<string>() ?? "UNKNOWN",
+            node["data"]?["fail_reason"]?.GetValue<string>()
+        );
     }
 
     private HttpClient CreateJsonClient(string accessToken)

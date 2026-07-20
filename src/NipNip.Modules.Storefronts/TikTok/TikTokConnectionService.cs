@@ -169,9 +169,10 @@ public class TikTokConnectionService(
         {
             await Task.Delay(1500);
             var status = await tiktok.GetPublishStatusAsync(accessToken, publishId);
-            if (status == "FAILED")
-                throw new ArgumentException("TikTok rejected this post — double-check your images and try again.");
-            if (status == "PUBLISH_COMPLETE") break;
+            logger.LogInformation("TikTok publish {PublishId} status: {Status} (fail_reason: {FailReason})", publishId, status.Status, status.FailReason);
+            if (status.Status == "FAILED")
+                throw new ArgumentException($"TikTok rejected this post ({status.FailReason ?? "no reason given"}) — double-check your images and try again.");
+            if (status.Status == "PUBLISH_COMPLETE") break;
         }
 
         return new TikTokPublishResponse(true, privacyLevel);
