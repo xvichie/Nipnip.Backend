@@ -88,7 +88,7 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
         return new TikTokCreatorInfo(options, data?["creator_nickname"]?.GetValue<string>());
     }
 
-    public async Task<string> InitPhotoPostAsync(string accessToken, string title, string description, string privacyLevel, List<string> photoImageUrls, int coverIndex)
+    public async Task<string> InitPhotoPostAsync(string accessToken, string title, string description, string privacyLevel, List<string> photoImageUrls, int coverIndex, bool autoAddMusic)
     {
         var client = CreateJsonClient(accessToken);
         var body = new
@@ -105,6 +105,10 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
                 // publishing photos of their own products/store, never paid third-party content.
                 brand_content_toggle = false,
                 brand_organic_toggle = true,
+                // TikTok's API has no way to pick a specific track — this just lets TikTok
+                // attach one of its own recommended sounds, which the creator can still swap
+                // from inside the TikTok app afterwards.
+                auto_add_music = autoAddMusic,
             },
             source_info = new
             {

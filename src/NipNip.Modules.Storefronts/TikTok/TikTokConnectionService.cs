@@ -119,12 +119,14 @@ public class TikTokConnectionService(
         var product = await productService.GetOwnProductAsync(clerkUserId, productId);
         var imageUrls = product.Images.OrderBy(i => i.SortOrder).Take(MaxPublishImages).Select(i => i.Url).ToList();
 
-        return await PublishAsync(store, imageUrls, request.Title, request.Description);
+        return await PublishAsync(store, imageUrls, request.Title, request.Description, request.AutoAddMusic);
     }
 
     // Ad-hoc publish path used by the Social Post Creator tool — the source image isn't tied
     // to a Product row (it's a freshly-generated canvas composite uploaded straight to
     // Cloudinary), so this takes image URLs directly instead of looking them up from a product.
+    // The caller controls both which images to include and their order (used as the photo
+    // carousel order, with the first image also becoming the cover).
     public async Task<TikTokPublishResponse> PublishImagesAsync(string clerkUserId, TikTokPublishImagesRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Title))
@@ -133,10 +135,10 @@ public class TikTokConnectionService(
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
         var imageUrls = request.ImageUrls.Take(MaxPublishImages).ToList();
 
-        return await PublishAsync(store, imageUrls, request.Title, request.Description);
+        return await PublishAsync(store, imageUrls, request.Title, request.Description, request.AutoAddMusic);
     }
 
-    private async Task<TikTokPublishResponse> PublishAsync(Store store, List<string> imageUrls, string title, string description)
+    private async Task<TikTokPublishResponse> PublishAsync(Store store, List<string> imageUrls, string title, string description, bool autoAddMusic)
     {
         if (store.TikTokAccessTokenEncrypted is null)
             throw new ConflictException("Connect your TikTok account first.");
@@ -160,7 +162,7 @@ public class TikTokConnectionService(
             : creatorInfo.PrivacyLevelOptions.FirstOrDefault()
                 ?? throw new ArgumentException("TikTok didn't return any privacy level options for this account.");
 
-        var publishId = await tiktok.InitPhotoPostAsync(accessToken, title.Trim(), description.Trim(), privacyLevel, proxiedUrls, 0);
+        var publishId = await tiktok.InitPhotoPostAsync(accessToken, title.Trim(), description.Trim(), privacyLevel, proxiedUrls, 0, autoAddMusic);
 
         // Best-effort short poll — TikTok processes the post asynchronously, so a failure
         // past this window (or a still-PROCESSING result) doesn't mean anything went wrong,
