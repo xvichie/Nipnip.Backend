@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NipNip.Data;
 using NipNip.Data.Entities;
@@ -15,7 +16,8 @@ public class TikTokConnectionService(
     ProductService productService,
     TikTokApiClient tiktok,
     AesStringProtector protector,
-    IOptions<TikTokOptions> options)
+    IOptions<TikTokOptions> options,
+    ILogger<TikTokConnectionService> logger)
 {
     private const int StateValidMinutes = 10;
     private const int MaxPublishImages = 10;
@@ -71,8 +73,9 @@ public class TikTokConnectionService(
 
             return $"{FrontendUrl}/dashboard/merchant/store/integrations?tiktok=connected";
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger.LogError(ex, "TikTok OAuth callback failed");
             return $"{FrontendUrl}/dashboard/merchant/store/integrations?tiktok=error";
         }
     }
