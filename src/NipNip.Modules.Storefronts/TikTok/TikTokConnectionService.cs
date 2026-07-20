@@ -178,8 +178,15 @@ public class TikTokConnectionService(
         return new TikTokPublishResponse(true, privacyLevel);
     }
 
-    private string BuildProxiedImageUrl(string cloudinaryUrl) =>
-        $"{FrontendUrl}/api/media/tiktok-proxy?src={Uri.EscapeDataString(cloudinaryUrl)}";
+    private string BuildProxiedImageUrl(string cloudinaryUrl)
+    {
+        // TikTok's format check appears to key off the fetched URL's own extension rather than
+        // only the Content-Type header, so the proxy URL needs to look like a real image file
+        // (e.g. /photo.jpg) instead of a bare, extension-less endpoint.
+        var pathWithoutQuery = cloudinaryUrl.Split('?')[0];
+        var extension = pathWithoutQuery.Contains('.') ? pathWithoutQuery[(pathWithoutQuery.LastIndexOf('.') + 1)..] : "jpg";
+        return $"{FrontendUrl}/api/media/tiktok-proxy/photo.{extension}?src={Uri.EscapeDataString(cloudinaryUrl)}";
+    }
 
     private async Task<string> GetAccessTokenAsync(Store store)
     {
