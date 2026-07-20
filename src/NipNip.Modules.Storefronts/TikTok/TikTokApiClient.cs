@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NipNip.Shared.Exceptions;
 
@@ -12,7 +13,7 @@ public record TikTokUserInfo(string DisplayName, string? AvatarUrl);
 
 public record TikTokCreatorInfo(List<string> PrivacyLevelOptions, string? CreatorNickname);
 
-public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikTokOptions> options)
+public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikTokOptions> options, ILogger<TikTokApiClient> logger)
 {
     private const string BaseUrl = "https://open.tiktokapis.com";
     private readonly TikTokOptions _options = options.Value;
@@ -138,7 +139,7 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
         return client;
     }
 
-    private static async Task<JsonNode> ParseAsync(HttpResponseMessage response, string fallbackMessage)
+    private async Task<JsonNode> ParseAsync(HttpResponseMessage response, string fallbackMessage)
     {
         var json = await response.Content.ReadAsStringAsync();
         JsonNode? node = null;
@@ -148,6 +149,9 @@ public class TikTokApiClient(IHttpClientFactory httpClientFactory, IOptions<TikT
         if (!response.IsSuccessStatusCode || (errorCode is not null && errorCode != "ok"))
         {
             var message = node?["error"]?["message"]?.GetValue<string>();
+            logger.LogWarning(
+                "TikTok API error on {Url}: status={Status} code={Code} body={Body}",
+                response.RequestMessage?.RequestUri, (int)response.StatusCode, errorCode, json);
             throw new ArgumentException(message ?? fallbackMessage);
         }
 
