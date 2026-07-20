@@ -180,12 +180,11 @@ public class TikTokConnectionService(
 
     private string BuildProxiedImageUrl(string cloudinaryUrl)
     {
-        // TikTok's format check appears to key off the fetched URL's own extension rather than
-        // only the Content-Type header, so the proxy URL needs to look like a real image file
-        // (e.g. /photo.jpg) instead of a bare, extension-less endpoint.
-        var pathWithoutQuery = cloudinaryUrl.Split('?')[0];
-        var extension = pathWithoutQuery.Contains('.') ? pathWithoutQuery[(pathWithoutQuery.LastIndexOf('.') + 1)..] : "jpg";
-        return $"{FrontendUrl}/api/media/tiktok-proxy/photo.{extension}?src={Uri.EscapeDataString(cloudinaryUrl)}";
+        // TikTok only accepts JPEG/WebP for photo posts, so the proxy always transcodes to JPEG
+        // regardless of the source format — the proxy URL's own extension should match that,
+        // since TikTok's format check appears to key off the fetched URL rather than only the
+        // Content-Type header.
+        return $"{FrontendUrl}/api/media/tiktok-proxy/photo.jpg?src={Uri.EscapeDataString(cloudinaryUrl)}";
     }
 
     private async Task<string> GetAccessTokenAsync(Store store)
