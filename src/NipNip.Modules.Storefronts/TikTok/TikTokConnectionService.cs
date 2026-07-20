@@ -150,8 +150,15 @@ public class TikTokConnectionService(
 
         var accessToken = await GetAccessTokenAsync(store);
         var creatorInfo = await tiktok.QueryCreatorInfoAsync(accessToken);
-        var privacyLevel = creatorInfo.PrivacyLevelOptions.FirstOrDefault()
-            ?? throw new ArgumentException("TikTok didn't return any privacy level options for this account.");
+        logger.LogInformation("TikTok creator_info privacy_level_options: {Options}", string.Join(",", creatorInfo.PrivacyLevelOptions));
+
+        // Unaudited apps are restricted to posting privately regardless of the connected
+        // account's own privacy setting — always prefer SELF_ONLY when TikTok offers it rather
+        // than trusting list order, since the first option returned isn't guaranteed to be it.
+        var privacyLevel = creatorInfo.PrivacyLevelOptions.Contains("SELF_ONLY")
+            ? "SELF_ONLY"
+            : creatorInfo.PrivacyLevelOptions.FirstOrDefault()
+                ?? throw new ArgumentException("TikTok didn't return any privacy level options for this account.");
 
         var publishId = await tiktok.InitPhotoPostAsync(accessToken, title.Trim(), description.Trim(), privacyLevel, proxiedUrls, 0);
 
