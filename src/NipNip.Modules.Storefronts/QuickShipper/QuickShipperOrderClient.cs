@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NipNip.Shared.Exceptions;
 
@@ -15,7 +16,7 @@ public record QuickShipperFeesQuery(
 // Raw wrapper around the v1/Order* endpoints — returns parsed JsonNode rather than strict
 // C# models, since QuickShipperService only needs a handful of fields out of each fairly
 // large response shape. Mirrors GraphApiClient's CreateClient/EnsureSuccess-style pattern.
-public class QuickShipperOrderClient(IHttpClientFactory httpClientFactory, IOptions<QuickShipperOptions> options)
+public class QuickShipperOrderClient(IHttpClientFactory httpClientFactory, IOptions<QuickShipperOptions> options, ILogger<QuickShipperOrderClient> logger)
 {
     private readonly QuickShipperOptions _options = options.Value;
 
@@ -64,7 +65,7 @@ public class QuickShipperOrderClient(IHttpClientFactory httpClientFactory, IOpti
         return client;
     }
 
-    private static async Task<JsonNode> ParseAsync(HttpResponseMessage response, string fallbackMessage)
+    private async Task<JsonNode> ParseAsync(HttpResponseMessage response, string fallbackMessage)
     {
         var json = await response.Content.ReadAsStringAsync();
         JsonNode? node = null;
@@ -73,6 +74,9 @@ public class QuickShipperOrderClient(IHttpClientFactory httpClientFactory, IOpti
         var success = node?["success"]?.GetValue<bool>() ?? response.IsSuccessStatusCode;
         if (!response.IsSuccessStatusCode || !success)
         {
+            logger.LogWarning(
+                "QuickShipper API error on {Url}: status={Status} body={Body}",
+                response.RequestMessage?.RequestUri, (int)response.StatusCode, json);
             var message = node?["userMessage"]?.GetValue<string>() ?? node?["developerMessage"]?.GetValue<string>();
             throw new ArgumentException(message ?? fallbackMessage);
         }
