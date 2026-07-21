@@ -56,6 +56,11 @@ public class Store
     public DateTimeOffset? TikTokTokenExpiresAt { get; set; }
     public DateTimeOffset? TikTokConnectedAt { get; set; }
 
+    // MyMarket.ge — public shop ID, not a secret (same reasoning as FlittMerchantId above).
+    // Used to import individual product listings by pasting a mymarket.ge product URL.
+    public string? MyMarketShopId { get; set; }
+    public DateTimeOffset? MyMarketConnectedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public Merchant Merchant { get; set; } = null!;
