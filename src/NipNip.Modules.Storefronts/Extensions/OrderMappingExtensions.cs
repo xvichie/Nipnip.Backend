@@ -41,6 +41,7 @@ public static class OrderMappingExtensions
             order.Items.Select(i => new OrderItemResponse(
                 i.Id,
                 i.VariantId,
+                i.Variant.ProductId,
                 i.Variant.Product.Name,
                 i.Variant.Sku,
                 i.Variant.Product.Images.OrderBy(img => img.SortOrder).FirstOrDefault()?.Url,

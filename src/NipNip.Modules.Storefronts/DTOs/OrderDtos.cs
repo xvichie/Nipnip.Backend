@@ -3,6 +3,7 @@ namespace NipNip.Modules.Storefronts.DTOs;
 public record OrderItemResponse(
     Guid Id,
     Guid VariantId,
+    Guid ProductId,
     string ProductName,
     string Sku,
     string? ImageUrl,
