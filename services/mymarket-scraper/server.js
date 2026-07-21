@@ -9,6 +9,12 @@ const SCRAPER_SECRET = process.env.SCRAPER_SECRET;
 // Real headless Chrome (with stealth patches) reliably passes MyMarket's Cloudflare
 // managed challenge — a plain server-side fetch gets a 403 almost every time, this doesn't.
 const MYMARKET_PRODUCT_URL = id => `https://api.mymarket.ge/api/ka/products/${id}/`;
+// A lightweight, always-valid GET on the same host — used purely to land the page on
+// api.mymarket.ge before firing an in-page fetch() POST, so the request's Origin header
+// (and CORS preflight) look like real site traffic, and to pick up any existing
+// cf_clearance cookie the browser already solved on a prior request.
+const MYMARKET_WARMUP_URL = 'https://api.mymarket.ge/api/ka/category?CatID=0';
+const MYMARKET_PRODUCTS_LIST_URL = 'https://api.mymarket.ge/api/ka/products';
 
 // One browser instance shared across requests — launching Chrome is the slow part
 // (multiple seconds), so keeping it warm makes every request after the first fast.
@@ -45,6 +51,36 @@ async function fetchProduct(id) {
   }
 }
 
+// Mirrors the exact request MyMarket's own shop page fires (sniffed from
+// mymarket.ge/shops/{id}/?Tab=products): a POST with CatID "0" (all categories) and
+// ShopIDs as a string. Needs a real page navigation first (not just a bare fetch) so the
+// POST's Origin header and CORS preflight match what their site actually sends.
+async function fetchShopProducts(shopId, pageNum) {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setExtraHTTPHeaders({ Accept: 'application/json' });
+    await page.goto(MYMARKET_WARMUP_URL, { waitUntil: 'networkidle0', timeout: 25000 });
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const text = await page.evaluate(
+      async (url, body) => {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return res.text();
+      },
+      MYMARKET_PRODUCTS_LIST_URL,
+      { CatID: '0', Page: pageNum, Limit: 28, ShopIDs: shopId }
+    );
+    return JSON.parse(text);
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 function runQueued(task) {
   const result = queue.then(task);
   // Swallow rejections here so one failed job doesn't wedge the queue for the next caller —
@@ -73,6 +109,26 @@ app.get('/mymarket/product/:id', async (req, res) => {
   } catch (err) {
     console.error(`mymarket-scraper: failed to fetch product ${id}:`, err.message);
     res.status(502).json({ error: 'Failed to fetch product from MyMarket.' });
+  }
+});
+
+app.get('/mymarket/shop/:shopId/products', async (req, res) => {
+  if (SCRAPER_SECRET && req.get('x-scraper-secret') !== SCRAPER_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { shopId } = req.params;
+  if (!/^\d+$/.test(shopId)) {
+    return res.status(400).json({ error: 'Invalid shop id' });
+  }
+  const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+
+  try {
+    const data = await runQueued(() => fetchShopProducts(shopId, pageNum));
+    res.json(data);
+  } catch (err) {
+    console.error(`mymarket-scraper: failed to fetch products for shop ${shopId} page ${pageNum}:`, err.message);
+    res.status(502).json({ error: 'Failed to fetch products from MyMarket.' });
   }
 });
 
