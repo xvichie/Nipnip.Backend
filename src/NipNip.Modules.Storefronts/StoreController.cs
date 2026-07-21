@@ -19,6 +19,14 @@ public class StoreController(StoreService storeService) : ControllerBase
         return Ok(await storeService.GetBySlugAsync(slug));
     }
 
+    [HttpGet("sitemap")]
+    [AllowAnonymous]
+    [EnableCors("Public")]
+    public async Task<ActionResult<List<StoreSitemapEntryResponse>>> GetSitemapSlugs()
+    {
+        return Ok(await storeService.GetSitemapSlugsAsync());
+    }
+
     [HttpPost]
     public async Task<ActionResult<StoreResponse>> Create([FromBody] CreateStoreRequest request)
     {

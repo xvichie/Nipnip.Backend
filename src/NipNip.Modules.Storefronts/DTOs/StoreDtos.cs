@@ -27,3 +27,5 @@ public record StoreDomainResponse(
 );
 
 public record StoreSlugResponse(string Slug);
+
+public record StoreSitemapEntryResponse(string Slug);

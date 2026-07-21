@@ -124,6 +124,17 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
         return store.ToDto();
     }
 
+    // Backs the root-level sitemap index — every active store belonging to a public, active,
+    // non-test merchant, so Google can discover every storefront subdomain automatically as
+    // soon as it goes live, without anyone needing to submit it by hand.
+    public async Task<List<StoreSitemapEntryResponse>> GetSitemapSlugsAsync()
+    {
+        return await db.Stores
+            .Where(s => s.IsActive && s.Merchant.IsActive && s.Merchant.IsPublic && !s.Merchant.IsTest)
+            .Select(s => new StoreSitemapEntryResponse(s.Slug))
+            .ToListAsync();
+    }
+
     public async Task<StoreDomainResponse> GetDomainStatusAsync(string clerkUserId)
     {
         var store = await GetOwnStoreAsync(clerkUserId);
