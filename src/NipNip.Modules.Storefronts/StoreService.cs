@@ -131,7 +131,7 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
     {
         return await db.Stores
             .Where(s => s.IsActive && s.Merchant.IsActive && s.Merchant.IsPublic && !s.Merchant.IsTest)
-            .Select(s => new StoreSitemapEntryResponse(s.Slug))
+            .Select(s => new StoreSitemapEntryResponse(s.Slug, s.CustomDomainVerifiedAt.HasValue ? s.CustomDomain : null))
             .ToListAsync();
     }
 

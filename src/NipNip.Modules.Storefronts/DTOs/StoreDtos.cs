@@ -8,7 +8,8 @@ public record StoreResponse(
     string ThemeConfig,
     bool IsActive,
     bool AffiliateEnabled,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    string? CustomDomain
 );
 
 public record CreateStoreRequest(string Slug, string Name, string? ThemeId, string? ThemeConfig);
@@ -28,4 +29,4 @@ public record StoreDomainResponse(
 
 public record StoreSlugResponse(string Slug);
 
-public record StoreSitemapEntryResponse(string Slug);
+public record StoreSitemapEntryResponse(string Slug, string? CustomDomain);
