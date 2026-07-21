@@ -1,0 +1,16 @@
+{
+  "name": "mymarket-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small standalone service that fetches MyMarket.ge product JSON through a real headless browser, since api.mymarket.ge sits behind a Cloudflare challenge that blocks plain server-side requests.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "puppeteer": "^23.11.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}
