@@ -35,6 +35,7 @@ public static class StorefrontServiceExtensions
         services.AddScoped<TikTokApiClient>();
         services.AddScoped<TikTokConnectionService>();
         services.AddScoped<StoreService>();
+        services.AddScoped<StoreAnalyticsService>();
         services.AddScoped<CategoryService>();
         services.AddScoped<StorePageService>();
         services.AddScoped<ContactMessageService>();

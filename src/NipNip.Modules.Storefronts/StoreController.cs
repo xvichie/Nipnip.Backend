@@ -9,7 +9,7 @@ namespace NipNip.Modules.Storefronts;
 [ApiController]
 [Route("api/stores")]
 [Authorize]
-public class StoreController(StoreService storeService) : ControllerBase
+public class StoreController(StoreService storeService, StoreAnalyticsService analyticsService) : ControllerBase
 {
     [HttpGet("{slug}")]
     [AllowAnonymous]
@@ -25,6 +25,22 @@ public class StoreController(StoreService storeService) : ControllerBase
     public async Task<ActionResult<List<StoreSitemapEntryResponse>>> GetSitemapSlugs()
     {
         return Ok(await storeService.GetSitemapSlugsAsync());
+    }
+
+    [HttpPost("{slug}/track-pageview")]
+    [AllowAnonymous]
+    [EnableCors("Public")]
+    public async Task<IActionResult> TrackPageView(string slug, [FromBody] TrackPageViewRequest request)
+    {
+        await analyticsService.TrackPageViewAsync(slug, request);
+        return NoContent();
+    }
+
+    [HttpGet("me/analytics")]
+    public async Task<ActionResult<StoreAnalyticsSummaryResponse>> GetAnalytics([FromQuery] int days = 30)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await analyticsService.GetSummaryAsync(clerkUserId, days));
     }
 
     [HttpPost]
