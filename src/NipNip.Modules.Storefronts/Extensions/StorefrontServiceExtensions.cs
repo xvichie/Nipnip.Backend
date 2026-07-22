@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using NipNip.Modules.Storefronts.AiAgent;
 using NipNip.Modules.Storefronts.Flitt;
 using NipNip.Modules.Storefronts.MyMarket;
+using NipNip.Modules.Storefronts.Phubber;
 using NipNip.Modules.Storefronts.QuickShipper;
 using NipNip.Modules.Storefronts.TikTok;
 using NipNip.Shared.Crypto;
@@ -34,6 +35,7 @@ public static class StorefrontServiceExtensions
         services.AddScoped<FlittApiClient>();
         services.AddScoped<FlittService>();
         services.AddScoped<MyMarketService>();
+        services.AddScoped<PhubberService>();
         services.AddScoped<TikTokApiClient>();
         services.AddScoped<TikTokConnectionService>();
         services.AddScoped<StoreService>();
