@@ -2,6 +2,7 @@ using Anthropic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NipNip.Modules.Storefronts.AiAgent;
+using NipNip.Modules.Storefronts.Extra;
 using NipNip.Modules.Storefronts.Flitt;
 using NipNip.Modules.Storefronts.MyMarket;
 using NipNip.Modules.Storefronts.Phubber;
@@ -36,6 +37,7 @@ public static class StorefrontServiceExtensions
         services.AddScoped<FlittService>();
         services.AddScoped<MyMarketService>();
         services.AddScoped<PhubberService>();
+        services.AddScoped<ExtraService>();
         services.AddScoped<TikTokApiClient>();
         services.AddScoped<TikTokConnectionService>();
         services.AddScoped<StoreService>();

@@ -66,6 +66,11 @@ public class Store
     public string? PhubberSellerId { get; set; }
     public DateTimeOffset? PhubberConnectedAt { get; set; }
 
+    // Extra.ge — public seller ID (the numeric sellerSecondaryId), not a secret. Used to
+    // browse and import a connected seller's own listings on this multi-merchant marketplace.
+    public string? ExtraSellerId { get; set; }
+    public DateTimeOffset? ExtraConnectedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public Merchant Merchant { get; set; } = null!;
