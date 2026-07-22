@@ -6,5 +6,6 @@ public enum PaymentMethod
     BankTransfer,
     Flitt,
     Tbc,
-    Bog
+    Bog,
+    CityPay
 }

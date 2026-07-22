@@ -47,6 +47,17 @@ public class Order
     public string? BogPreOrderId { get; set; }
     public string? BogMerchantData { get; set; }
 
+    // Set once a CityPay order has been created for this order (PaymentMethod.CityPay).
+    // CityPay's own numeric order id is kept for support/debugging only — callback lookups use
+    // order_token instead, which we set to this Order's own Id ("N" format) so no separate
+    // mapping column is needed to find the order again.
+    public long? CityPayOrderId { get; set; }
+
+    // CityPay's callback carries only the order_token (== this order's Id) with no generic
+    // passthrough field, so — like Tbc/BogMerchantData — the cart session/referral context
+    // needed to finalize the order is stashed here at checkout time instead.
+    public string? CityPayMerchantData { get; set; }
+
     // Snapshot of the originating Conversation's cumulative token usage at the moment
     // this order was drafted — only set for Source == OrderSource.AiAgent. Lets
     // cost-per-order be queried without joining back through conversation history.

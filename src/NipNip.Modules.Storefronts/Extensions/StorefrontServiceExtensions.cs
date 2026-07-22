@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NipNip.Modules.Storefronts.AiAgent;
 using NipNip.Modules.Storefronts.Bog;
+using NipNip.Modules.Storefronts.CityPay;
 using NipNip.Modules.Storefronts.Extra;
 using NipNip.Modules.Storefronts.Flitt;
 using NipNip.Modules.Storefronts.MyMarket;
@@ -26,6 +27,7 @@ public static class StorefrontServiceExtensions
         services.AddOptions<FlittOptions>().BindConfiguration("Flitt");
         services.AddOptions<TbcOptions>().BindConfiguration("Tbc");
         services.AddOptions<BogOptions>().BindConfiguration("Bog");
+        services.AddOptions<CityPayOptions>().BindConfiguration("CityPay");
         services.AddOptions<TikTokOptions>().BindConfiguration("TikTok");
         services.AddSingleton(sp => new AesStringProtector(sp.GetRequiredService<IOptions<FacebookOptions>>().Value.TokenEncryptionKey));
         services.AddSingleton(sp => new AnthropicClient { ApiKey = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value.ApiKey });
@@ -43,6 +45,8 @@ public static class StorefrontServiceExtensions
         services.AddScoped<TbcService>();
         services.AddScoped<BogApiClient>();
         services.AddScoped<BogService>();
+        services.AddScoped<CityPayApiClient>();
+        services.AddScoped<CityPayService>();
         services.AddScoped<MyMarketService>();
         services.AddScoped<PhubberService>();
         services.AddScoped<ExtraService>();

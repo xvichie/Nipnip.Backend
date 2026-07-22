@@ -66,6 +66,13 @@ public class Store
     public DateTimeOffset? BogTokenExpiresAt { get; set; }
     public DateTimeOffset? BogConnectedAt { get; set; }
 
+    // CityPay (crypto hosted checkout) — customer_id isn't secret (an account identifier), but
+    // the access token must stay server-side only, encrypted the same way as Flitt's secret key.
+    // No OAuth/token-caching needed — CityPay's auth is just these two static values per call.
+    public string? CityPayCustomerId { get; set; }
+    public string? CityPayAccessTokenEncrypted { get; set; }
+    public DateTimeOffset? CityPayConnectedAt { get; set; }
+
     // TikTok — Login Kit OAuth. Access tokens last 24h and refresh tokens 365 days, both
     // rotate on every refresh call, so both are cached encrypted and re-derived on demand
     // (mirrors the QuickShipper token-caching shape).
