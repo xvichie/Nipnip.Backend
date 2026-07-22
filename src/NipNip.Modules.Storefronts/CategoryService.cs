@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NipNip.Data;
 using NipNip.Data.Entities;
@@ -45,6 +46,8 @@ public class CategoryService(AppDbContext db, StoreService storeService)
             !await db.Categories.AnyAsync(c => c.Id == request.ParentCategoryId.Value && c.StoreId == store.Id))
             throw new NotFoundException("Parent category not found.");
 
+        ValidateDefaultOptions(request.DefaultOptions);
+
         var category = new Category
         {
             Id = Guid.NewGuid(),
@@ -55,6 +58,7 @@ public class CategoryService(AppDbContext db, StoreService storeService)
             IconUrl = NormalizeIcon(request.IconUrl),
             IconKey = NormalizeIcon(request.IconKey),
             IconEmoji = NormalizeIcon(request.IconEmoji),
+            DefaultOptions = request.DefaultOptions ?? "[]",
         };
 
         db.Categories.Add(category);
@@ -64,6 +68,19 @@ public class CategoryService(AppDbContext db, StoreService storeService)
     }
 
     private static string? NormalizeIcon(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void ValidateDefaultOptions(string? defaultOptions)
+    {
+        if (defaultOptions is null) return;
+        try
+        {
+            JsonDocument.Parse(defaultOptions);
+        }
+        catch (JsonException)
+        {
+            throw new ArgumentException("DefaultOptions must be valid JSON.");
+        }
+    }
 
     private async Task<string> GenerateUniqueSlugAsync(Guid storeId, string name, Guid? excludeId = null)
     {
@@ -102,13 +119,22 @@ public class CategoryService(AppDbContext db, StoreService storeService)
 
             if (!await db.Categories.AnyAsync(c => c.Id == request.ParentCategoryId.Value && c.StoreId == store.Id))
                 throw new NotFoundException("Parent category not found.");
-
-            category.ParentCategoryId = request.ParentCategoryId;
         }
+
+        // The frontend always sends this field on every update (never omits it), so a null here
+        // means "clear the parent" — unlike the HasValue-gated fields above, it must always be
+        // assigned, not just when non-null, or there'd be no way to remove a category's parent.
+        category.ParentCategoryId = request.ParentCategoryId;
 
         category.IconUrl = NormalizeIcon(request.IconUrl);
         category.IconKey = NormalizeIcon(request.IconKey);
         category.IconEmoji = NormalizeIcon(request.IconEmoji);
+
+        if (request.DefaultOptions is not null)
+        {
+            ValidateDefaultOptions(request.DefaultOptions);
+            category.DefaultOptions = request.DefaultOptions;
+        }
 
         await db.SaveChangesAsync();
         return category.ToDto();

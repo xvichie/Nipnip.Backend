@@ -15,6 +15,10 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(c => c.Slug).IsRequired();
         builder.HasIndex(c => new { c.StoreId, c.Slug }).IsUnique();
 
+        builder.Property(c => c.DefaultOptions)
+            .HasColumnType("jsonb")
+            .HasDefaultValue("[]");
+
         builder.HasOne(c => c.ParentCategory)
             .WithMany(c => c.ChildCategories)
             .HasForeignKey(c => c.ParentCategoryId)
