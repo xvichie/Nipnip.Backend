@@ -5,5 +5,6 @@ public enum PaymentMethod
     CashOnDelivery,
     BankTransfer,
     Flitt,
-    Tbc
+    Tbc,
+    Bog
 }

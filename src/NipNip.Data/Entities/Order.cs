@@ -39,6 +39,14 @@ public class Order
     // order (clear cart, record affiliate conversion) is stashed here at checkout time instead.
     public string? TbcMerchantData { get; set; }
 
+    // Set once a Bank of Georgia pre-order checkout link has been created for this order
+    // (PaymentMethod.Bog). BOG's callback body is signed but we don't hold their public key
+    // to verify it, so — like Tbc — the callback is treated only as a "check now" trigger and
+    // the real status is re-pulled with our own Bearer token; merchant data is stashed the
+    // same way as Tbc's for the same reason (no reliable passthrough back from the gateway).
+    public string? BogPreOrderId { get; set; }
+    public string? BogMerchantData { get; set; }
+
     // Snapshot of the originating Conversation's cumulative token usage at the moment
     // this order was drafted — only set for Source == OrderSource.AiAgent. Lets
     // cost-per-order be queried without joining back through conversation history.

@@ -56,6 +56,16 @@ public class Store
     public DateTimeOffset? TbcTokenExpiresAt { get; set; }
     public DateTimeOffset? TbcConnectedAt { get; set; }
 
+    // Bank of Georgia "Payment by Link" (hosted checkout) — client_id/client_secret are a
+    // per-merchant OAuth 2.0 client-credentials pair from businessmanager.bog.ge, with no
+    // separate app-wide key (unlike TBC). Access token is cached the same way as TBC/
+    // QuickShipper's, since it also expires and must be re-derived.
+    public string? BogClientId { get; set; }
+    public string? BogClientSecretEncrypted { get; set; }
+    public string? BogAccessTokenEncrypted { get; set; }
+    public DateTimeOffset? BogTokenExpiresAt { get; set; }
+    public DateTimeOffset? BogConnectedAt { get; set; }
+
     // TikTok — Login Kit OAuth. Access tokens last 24h and refresh tokens 365 days, both
     // rotate on every refresh call, so both are cached encrypted and re-derived on demand
     // (mirrors the QuickShipper token-caching shape).
