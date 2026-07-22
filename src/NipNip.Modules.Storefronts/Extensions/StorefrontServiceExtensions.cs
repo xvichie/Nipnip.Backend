@@ -7,6 +7,7 @@ using NipNip.Modules.Storefronts.Flitt;
 using NipNip.Modules.Storefronts.MyMarket;
 using NipNip.Modules.Storefronts.Phubber;
 using NipNip.Modules.Storefronts.QuickShipper;
+using NipNip.Modules.Storefronts.Tbc;
 using NipNip.Modules.Storefronts.TikTok;
 using NipNip.Shared.Crypto;
 
@@ -22,6 +23,7 @@ public static class StorefrontServiceExtensions
         services.AddOptions<VoyageOptions>().BindConfiguration("Voyage");
         services.AddOptions<QuickShipperOptions>().BindConfiguration("QuickShipper");
         services.AddOptions<FlittOptions>().BindConfiguration("Flitt");
+        services.AddOptions<TbcOptions>().BindConfiguration("Tbc");
         services.AddOptions<TikTokOptions>().BindConfiguration("TikTok");
         services.AddSingleton(sp => new AesStringProtector(sp.GetRequiredService<IOptions<FacebookOptions>>().Value.TokenEncryptionKey));
         services.AddSingleton(sp => new AnthropicClient { ApiKey = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value.ApiKey });
@@ -35,6 +37,8 @@ public static class StorefrontServiceExtensions
         services.AddScoped<QuickShipperService>();
         services.AddScoped<FlittApiClient>();
         services.AddScoped<FlittService>();
+        services.AddScoped<TbcApiClient>();
+        services.AddScoped<TbcService>();
         services.AddScoped<MyMarketService>();
         services.AddScoped<PhubberService>();
         services.AddScoped<ExtraService>();

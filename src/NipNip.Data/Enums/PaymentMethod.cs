@@ -4,5 +4,6 @@ public enum PaymentMethod
 {
     CashOnDelivery,
     BankTransfer,
-    Flitt
+    Flitt,
+    Tbc
 }

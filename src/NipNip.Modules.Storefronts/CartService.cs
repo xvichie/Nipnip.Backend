@@ -7,6 +7,7 @@ using NipNip.Data.Enums;
 using NipNip.Modules.Storefronts.DTOs;
 using NipNip.Modules.Storefronts.Extensions;
 using NipNip.Modules.Storefronts.Flitt;
+using NipNip.Modules.Storefronts.Tbc;
 using NipNip.Modules.Tracking;
 using NipNip.Shared.Email;
 using NipNip.Shared.Exceptions;
@@ -18,6 +19,7 @@ public class CartService(
     IEmailService emailService,
     TrackingService trackingService,
     FlittService flittService,
+    TbcService tbcService,
     ILogger<CartService> logger)
 {
     public async Task<CartResponse> GetCartAsync(string slug, string? sessionId)
@@ -181,7 +183,7 @@ public class CartService(
             throw new ArgumentException("Address is required.");
 
         if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var paymentMethod))
-            throw new ArgumentException("Payment method must be 'CashOnDelivery', 'BankTransfer', or 'Flitt'.");
+            throw new ArgumentException("Payment method must be 'CashOnDelivery', 'BankTransfer', 'Flitt', or 'Tbc'.");
 
         var cart = await GetOrCreateCartAsync(slug, sessionId);
 
@@ -190,7 +192,7 @@ public class CartService(
 
         var store = await db.Stores.AsNoTracking().FirstOrDefaultAsync(s => s.Id == cart.StoreId);
 
-        if (paymentMethod == PaymentMethod.Flitt && store is null)
+        if ((paymentMethod == PaymentMethod.Flitt || paymentMethod == PaymentMethod.Tbc) && store is null)
             throw new NotFoundException("Store not found.");
 
         var order = new Order
@@ -237,11 +239,11 @@ public class CartService(
         db.Orders.Add(order);
         db.OrderItems.AddRange(orderItems);
 
-        // Flitt orders aren't "placed" yet — the customer still has to complete a hosted
+        // Flitt/TBC orders aren't "placed" yet — the customer still has to complete a hosted
         // payment. The cart, confirmation email, and affiliate conversion all wait until the
-        // signed callback confirms payment (FlittService.FinalizeApprovedOrderAsync), so an
+        // callback confirms payment (FlittService/TbcService FinalizeApprovedOrderAsync), so an
         // abandoned/declined payment doesn't lose the customer's cart or fire a false conversion.
-        if (paymentMethod != PaymentMethod.Flitt)
+        if (paymentMethod != PaymentMethod.Flitt && paymentMethod != PaymentMethod.Tbc)
             db.CartItems.RemoveRange(cart.Items);
 
         await db.SaveChangesAsync();
@@ -250,6 +252,13 @@ public class CartService(
         {
             var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
             var checkoutUrl = await flittService.CreateCheckoutSessionAsync(order, store!, merchantData);
+            return order.ToDto() with { RedirectUrl = checkoutUrl };
+        }
+
+        if (paymentMethod == PaymentMethod.Tbc)
+        {
+            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
+            var checkoutUrl = await tbcService.CreateCheckoutSessionAsync(order, store!, merchantData);
             return order.ToDto() with { RedirectUrl = checkoutUrl };
         }
 

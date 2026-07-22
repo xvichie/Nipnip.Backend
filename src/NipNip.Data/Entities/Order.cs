@@ -30,6 +30,15 @@ public class Order
     // Set once a Flitt checkout session has been created for this order (PaymentMethod.Flitt).
     public long? FlittPaymentId { get; set; }
 
+    // Set once a TBC checkout session has been created for this order (PaymentMethod.Tbc).
+    // TBC's payId is an opaque string (e.g. "tpay-tbvqma2372015"), unlike Flitt's numeric id.
+    public string? TbcPaymentId { get; set; }
+
+    // TBC's async callback body only carries a payment id, with no generic passthrough field
+    // like Flitt's merchant_data — so the cart session/referral context needed to finalize the
+    // order (clear cart, record affiliate conversion) is stashed here at checkout time instead.
+    public string? TbcMerchantData { get; set; }
+
     // Snapshot of the originating Conversation's cumulative token usage at the moment
     // this order was drafted — only set for Source == OrderSource.AiAgent. Lets
     // cost-per-order be queried without joining back through conversation history.

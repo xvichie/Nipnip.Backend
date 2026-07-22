@@ -46,6 +46,16 @@ public class Store
     public string? FlittSecretKeyEncrypted { get; set; }
     public DateTimeOffset? FlittConnectedAt { get; set; }
 
+    // TBC Bank E-Commerce (hosted checkout) — client_id/client_secret are per-merchant
+    // credentials from ecom.tbcpayments.ge; the "apikey" developer-app credential is app-wide
+    // config (TbcOptions), not stored here. Access token is cached the same way as
+    // QuickShipper's, since it also expires and must be re-derived.
+    public string? TbcClientId { get; set; }
+    public string? TbcClientSecretEncrypted { get; set; }
+    public string? TbcAccessTokenEncrypted { get; set; }
+    public DateTimeOffset? TbcTokenExpiresAt { get; set; }
+    public DateTimeOffset? TbcConnectedAt { get; set; }
+
     // TikTok — Login Kit OAuth. Access tokens last 24h and refresh tokens 365 days, both
     // rotate on every refresh call, so both are cached encrypted and re-derived on demand
     // (mirrors the QuickShipper token-caching shape).
