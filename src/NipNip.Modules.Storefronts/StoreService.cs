@@ -111,6 +111,25 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
 
         if (request.IsActive.HasValue) store.IsActive = request.IsActive.Value;
         if (request.AffiliateEnabled.HasValue) store.AffiliateEnabled = request.AffiliateEnabled.Value;
+        if (request.ThemeOverrideEnabled.HasValue) store.ThemeOverrideEnabled = request.ThemeOverrideEnabled.Value;
+
+        await db.SaveChangesAsync();
+        return store.ToDto();
+    }
+
+    public async Task<StoreResponse> SetThemeOverrideAdminAsync(Guid merchantId, SetStoreThemeOverrideRequest request)
+    {
+        var store = await db.Stores.FirstOrDefaultAsync(s => s.MerchantId == merchantId)
+            ?? throw new NotFoundException("This merchant doesn't have a store yet.");
+
+        ValidateThemeOverride(request.ThemeOverride);
+
+        // Auto-enable the first time content goes from unset to set, so the admin's change takes
+        // effect immediately — but a merchant who later disabled it isn't silently re-enabled by
+        // a subsequent admin edit.
+        var wasUnset = store.ThemeOverride is null;
+        store.ThemeOverride = request.ThemeOverride;
+        if (wasUnset && request.ThemeOverride is not null) store.ThemeOverrideEnabled = true;
 
         await db.SaveChangesAsync();
         return store.ToDto();
@@ -232,6 +251,19 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
         catch (JsonException)
         {
             throw new ArgumentException("ThemeConfig must be valid JSON.");
+        }
+    }
+
+    private static void ValidateThemeOverride(string? themeOverride)
+    {
+        if (themeOverride is null) return;
+        try
+        {
+            JsonDocument.Parse(themeOverride);
+        }
+        catch (JsonException)
+        {
+            throw new ArgumentException("ThemeOverride must be valid JSON.");
         }
     }
 }

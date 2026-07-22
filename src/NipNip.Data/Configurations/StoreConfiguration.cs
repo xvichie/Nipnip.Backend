@@ -21,6 +21,11 @@ public class StoreConfiguration : IEntityTypeConfiguration<Store>
             .HasColumnType("jsonb")
             .HasDefaultValue("{}");
 
+        builder.Property(s => s.ThemeOverride)
+            .HasColumnType("jsonb");
+
+        builder.Property(s => s.ThemeOverrideEnabled).HasDefaultValue(true);
+
         builder.Property(s => s.IsActive).HasDefaultValue(true);
 
         builder.HasOne(s => s.Merchant)

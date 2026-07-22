@@ -9,12 +9,17 @@ public record StoreResponse(
     bool IsActive,
     bool AffiliateEnabled,
     DateTimeOffset CreatedAt,
-    string? CustomDomain
+    string? CustomDomain,
+    string? ThemeOverride,
+    bool ThemeOverrideEnabled
 );
 
 public record CreateStoreRequest(string Slug, string Name, string? ThemeId, string? ThemeConfig);
 
-public record UpdateStoreRequest(string? Name, string? ThemeId, string? ThemeConfig, bool? IsActive, bool? AffiliateEnabled);
+public record UpdateStoreRequest(string? Name, string? ThemeId, string? ThemeConfig, bool? IsActive, bool? AffiliateEnabled, bool? ThemeOverrideEnabled);
+
+// Admin-only — sets the ThemeOverride *content*. Pass null to clear it.
+public record SetStoreThemeOverrideRequest(string? ThemeOverride);
 
 public record SetStoreDomainRequest(string Domain);
 

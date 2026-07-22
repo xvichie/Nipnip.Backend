@@ -177,6 +177,13 @@ public class AdminController(
         return Ok(await storeService.CreateAdminAsync(merchantId, request));
     }
 
+    [HttpPut("merchants/{merchantId:guid}/store/theme-override")]
+    public async Task<ActionResult<StoreResponse>> SetStoreThemeOverride(
+        Guid merchantId, [FromBody] SetStoreThemeOverrideRequest request)
+    {
+        return Ok(await storeService.SetThemeOverrideAdminAsync(merchantId, request));
+    }
+
     // --- Creators ---
 
     [HttpGet("creators")]

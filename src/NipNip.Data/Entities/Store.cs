@@ -8,6 +8,13 @@ public class Store
     public string Name { get; set; } = "";
     public string ThemeId { get; set; } = "default";
     public string ThemeConfig { get; set; } = "{}";
+
+    // Admin-only visual overlay layered on top of the merchant's own theme: JSON shaped
+    // { customCss?, announcementHtml?, footerExtraHtml? }. Only writable via the admin API —
+    // the merchant can see it's active and toggle it on/off, but never edit its content.
+    public string? ThemeOverride { get; set; }
+    public bool ThemeOverrideEnabled { get; set; } = true;
+
     public bool IsActive { get; set; } = true;
     public string? CustomDomain { get; set; }
     public DateTimeOffset? CustomDomainVerifiedAt { get; set; }
