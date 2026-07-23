@@ -9,7 +9,8 @@ public record ProductSummaryResponse(
     decimal? SalePrice,
     bool IsActive,
     string? ThumbnailUrl,
-    string? SecondImageUrl
+    string? SecondImageUrl,
+    DateTimeOffset CreatedAt
 );
 
 public record ProductDetailResponse(

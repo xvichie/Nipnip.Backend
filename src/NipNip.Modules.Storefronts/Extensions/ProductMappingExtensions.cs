@@ -18,7 +18,8 @@ public static class ProductMappingExtensions
             product.SalePrice,
             product.IsActive,
             orderedImageUrls.FirstOrDefault(),
-            orderedImageUrls.Skip(1).FirstOrDefault()
+            orderedImageUrls.Skip(1).FirstOrDefault(),
+            product.CreatedAt
         );
     }
 
