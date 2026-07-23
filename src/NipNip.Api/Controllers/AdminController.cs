@@ -228,6 +228,13 @@ public class AdminController(
         return Ok(await facebookImportService.ImportAsync(request));
     }
 
+    [HttpDelete("prospects/{id:guid}")]
+    public async Task<IActionResult> DeleteProspect(Guid id)
+    {
+        await merchantService.DeleteProspectAsync(id);
+        return NoContent();
+    }
+
     // --- Prospect products/categories (admin manages these on the prospect's behalf, since a
     // prospect has no real Clerk account of its own to sign in and use the normal merchant
     // dashboard with) ---

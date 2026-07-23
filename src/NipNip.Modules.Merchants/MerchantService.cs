@@ -275,6 +275,21 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         return merchant.ToDto();
     }
 
+    // Hard-deletes a never-promoted demo prospect (and its Store/Categories/Products/etc. via
+    // cascade) so Prospect Studio doesn't pile up abandoned demos. Refuses anything already
+    // promoted to a real merchant — those must go through actual account deletion, not this.
+    public async Task DeleteProspectAsync(Guid id)
+    {
+        var merchant = await db.Merchants.FindAsync(id)
+            ?? throw new NotFoundException("Merchant not found.");
+
+        if (!merchant.IsProspect)
+            throw new ConflictException("This merchant is not a prospect — refusing to delete a real merchant here.");
+
+        db.Merchants.Remove(merchant);
+        await db.SaveChangesAsync();
+    }
+
     public async Task<MerchantResponse> ToggleHighlightAsync(Guid id)
     {
         var merchant = await db.Merchants.FindAsync(id)
