@@ -121,6 +121,8 @@ public class ProductService(AppDbContext db, StoreService storeService)
         return result.Map(p => p.ToSummaryDto());
     }
 
+    private static readonly JsonSerializerOptions OptionFiltersJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     // Malformed/empty input yields no filters rather than an error — a broken filter state on
     // the listing page should show everything, not 500.
     private static List<OptionFilterInput> ParseOptionFilters(string? optionFilters)
@@ -128,7 +130,8 @@ public class ProductService(AppDbContext db, StoreService storeService)
         if (string.IsNullOrWhiteSpace(optionFilters)) return [];
         try
         {
-            return JsonSerializer.Deserialize<List<OptionFilterInput>>(optionFilters) ?? [];
+            var parsed = JsonSerializer.Deserialize<List<OptionFilterInput>>(optionFilters, OptionFiltersJsonOptions) ?? [];
+            return parsed.Where(f => !string.IsNullOrWhiteSpace(f.Name) && f.Values is { Count: > 0 }).ToList();
         }
         catch (JsonException)
         {
