@@ -30,6 +30,7 @@ public class AdminController(
     ProductService productService,
     CategoryService categoryService,
     ProductImageService productImageService,
+    FacebookImportService facebookImportService,
     AppDbContext db) : ControllerBase
 {
     // --- Stats ---
@@ -219,6 +220,12 @@ public class AdminController(
     public async Task<ActionResult<MerchantResponse>> PromoteProspect(Guid id, [FromBody] PromoteProspectRequest request)
     {
         return Ok(await merchantService.PromoteProspectAsync(id, request.ClerkUserId));
+    }
+
+    [HttpPost("prospects/import-facebook")]
+    public async Task<ActionResult<ImportFacebookResponse>> ImportFacebook([FromBody] ImportFacebookRequest request)
+    {
+        return Ok(await facebookImportService.ImportAsync(request));
     }
 
     // --- Prospect products/categories (admin manages these on the prospect's behalf, since a

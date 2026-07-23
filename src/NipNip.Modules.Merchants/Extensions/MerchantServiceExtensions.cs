@@ -7,6 +7,7 @@ public static class MerchantServiceExtensions
     public static IServiceCollection AddMerchantModule(this IServiceCollection services)
     {
         services.AddScoped<MerchantService>();
+        services.AddScoped<FacebookImportService>();
         return services;
     }
 }

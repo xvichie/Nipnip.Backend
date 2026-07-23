@@ -35,3 +35,9 @@ public record MerchantAccessRequestResponse(
 public record AddApprovedCreatorRequest(Guid CreatorId);
 
 public record AiImageUsageResponse(int Used, int Limit, string Period);
+
+/// <summary>Provide exactly one of Url or Html — see FacebookImportService for why both exist.</summary>
+public record ImportFacebookRequest(string? Url, string? Html);
+
+/// <summary>ImageDataUri is a data: URI (e.g. "data:image/jpeg;base64,...") ready to hand to the frontend's existing image-upload flow, not a Facebook-hosted link.</summary>
+public record ImportFacebookResponse(string? Name, string? Description, string? ImageDataUri);
