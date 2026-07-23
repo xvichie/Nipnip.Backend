@@ -6,17 +6,30 @@ using NipNip.Shared.Exceptions;
 namespace NipNip.Modules.Merchants;
 
 // Pulls a quick starting point (name/description/photo) for a prospect's demo store from a
-// Facebook Page — either a URL we fetch ourselves, or HTML the admin already has open in their
-// own logged-in browser and pastes in (Facebook's actual content is heavily JS-rendered and
-// often blocks server-side fetches, so pasted HTML is the reliable fallback). Either way, this
-// only ever reads the same Open Graph meta tags Facebook already serves for public link
-// previews — nothing gated behind a login, no scraping of private/JS-hydrated content.
+// Facebook Page — either a URL we fetch ourselves, or HTML the admin pastes in. Facebook only
+// server-renders Open Graph meta tags for logged-out requests (that's what they're for — link
+// previews for visitors/crawlers who aren't signed in); a logged-in browser's View Source is
+// just the client-hydrated app shell with no og: tags at all. So both paths need a logged-out
+// view: our server fetch has no session either way, and the admin must grab the HTML from an
+// Incognito/Private window rather than their normal logged-in tab.
 public class FacebookImportService(IHttpClientFactory httpClientFactory)
 {
     private const long MaxImageBytes = 8 * 1024 * 1024;
 
     private static readonly Regex OgTagRegex = new(
         """<meta[^>]+?(?:property=["']og:(?<prop1>[a-z:]+)["'][^>]*?content=["'](?<content1>[^"']*)["']|content=["'](?<content2>[^"']*)["'][^>]*?property=["']og:(?<prop2>[a-z:]+)["'])[^>]*?>""",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Fallback when og:title is missing but the plain <title> tag isn't — typically formatted
+    // "Page Name | Facebook" or "Page Name - Facebook".
+    private static readonly Regex TitleRegex = new(
+        """<title[^>]*>(?<title>[^<]*)</title>""",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Matches the generic logged-in shell title (e.g. "Facebook" or "(2) Facebook" for a
+    // notification badge) so we don't use it as a page name.
+    private static readonly Regex GenericTitleRegex = new(
+        """^\(?\d*\)?\s*Facebook$""",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public async Task<ImportFacebookResponse> ImportAsync(ImportFacebookRequest request)
@@ -40,10 +53,12 @@ public class FacebookImportService(IHttpClientFactory httpClientFactory)
         tags.TryGetValue("description", out var description);
         tags.TryGetValue("image", out var imageUrl);
 
+        name ??= ExtractFallbackName(html);
+
         string? imageDataUri = string.IsNullOrWhiteSpace(imageUrl) ? null : await TryDownloadAsDataUriAsync(imageUrl);
 
         if (name is null && description is null && imageDataUri is null)
-            throw new ArgumentException("Couldn't find any Facebook page info there. Try pasting the page's HTML instead — open the link, right-click → View Page Source, copy all, and paste it in.");
+            throw new ArgumentException("Couldn't find any Facebook page info there. Facebook only includes page details in the source when you're logged out — open the link in an Incognito/Private window, right-click → View Page Source, copy all, and paste it in.");
 
         return new ImportFacebookResponse(name, description, imageDataUri);
     }
@@ -62,8 +77,23 @@ public class FacebookImportService(IHttpClientFactory httpClientFactory)
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             throw new ArgumentException(
-                "Couldn't fetch that URL — Facebook often blocks automated requests. Open the link yourself, right-click → View Page Source, copy all, and paste it in instead.");
+                "Couldn't fetch that URL — Facebook often blocks automated requests. Open the link in an Incognito/Private window instead, right-click → View Page Source, copy all, and paste it in.");
         }
+    }
+
+    private static string? ExtractFallbackName(string html)
+    {
+        var match = TitleRegex.Match(html);
+        if (!match.Success) return null;
+
+        var title = WebUtility.HtmlDecode(match.Groups["title"].Value).Trim();
+        if (title.Length == 0 || GenericTitleRegex.IsMatch(title)) return null;
+
+        var separatorIndex = title.LastIndexOf('|');
+        if (separatorIndex < 0) separatorIndex = title.LastIndexOf(" - ", StringComparison.Ordinal);
+        if (separatorIndex > 0) title = title[..separatorIndex].Trim();
+
+        return title.Length == 0 ? null : title;
     }
 
     private static Dictionary<string, string> ExtractOgTags(string html)
