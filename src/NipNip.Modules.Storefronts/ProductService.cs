@@ -355,6 +355,134 @@ public class ProductService(AppDbContext db, StoreService storeService)
         return product.ToDetailDto();
     }
 
+    // --- Admin-scoped (building out a prospect's demo store, or support on a real merchant's
+    // behalf) — resolves the store by merchantId directly instead of the caller's own Clerk
+    // identity. Kept as separate methods rather than refactored into the self-service ones
+    // above, so this addition can't change behavior for the existing, already-correct
+    // merchant-facing flows that every real store depends on. ---
+
+    public async Task<PaginatedResult<ProductSummaryResponse>> GetAllAdminForMerchantAsync(Guid merchantId, PaginatedRequest pagination)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        var result = await db.Products
+            .Include(p => p.Images)
+            .Where(p => p.StoreId == store.Id)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToPaginatedResultAsync(pagination);
+
+        return result.Map(p => p.ToSummaryDto());
+    }
+
+    public async Task<ProductDetailResponse> CreateAdminAsync(Guid merchantId, CreateProductRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Name is required.");
+
+        if (request.BasePrice < 0)
+            throw new ArgumentException("Base price cannot be negative.");
+
+        if (request.SalePrice.HasValue && (request.SalePrice.Value < 0 || request.SalePrice.Value >= request.BasePrice))
+            throw new ArgumentException("Sale price must be less than the base price.");
+
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        if (request.CategoryId.HasValue &&
+            !await db.Categories.AnyAsync(c => c.Id == request.CategoryId.Value && c.StoreId == store.Id))
+            throw new NotFoundException("Category not found.");
+
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            StoreId = store.Id,
+            CategoryId = request.CategoryId,
+            Name = request.Name.Trim(),
+            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
+            Description = request.Description,
+            VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim(),
+            BasePrice = request.BasePrice,
+            SalePrice = request.SalePrice,
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+
+        db.Products.Add(product);
+        await db.SaveChangesAsync();
+
+        // A freshly created product has no images/options/variants yet, so the entity's
+        // (empty, initialized-in-place) collections are already accurate — no re-fetch needed.
+        return product.ToDetailDto();
+    }
+
+    public async Task<ProductDetailResponse> UpdateAdminAsync(Guid merchantId, Guid id, UpdateProductRequest request)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        var product = await db.Products
+            .Include(p => p.Images)
+            .Include(p => p.Options).ThenInclude(o => o.Values)
+            .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
+            .FirstOrDefaultAsync(p => p.Id == id && p.StoreId == store.Id)
+            ?? throw new NotFoundException("Product not found.");
+
+        if (request.Name is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Name cannot be empty.");
+            product.Name = request.Name.Trim();
+        }
+
+        if (request.Description is not null) product.Description = request.Description;
+
+        if (request.VideoUrl is not null)
+            product.VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim();
+
+        if (request.BasePrice.HasValue)
+        {
+            if (request.BasePrice.Value < 0)
+                throw new ArgumentException("Base price cannot be negative.");
+            product.BasePrice = request.BasePrice.Value;
+        }
+
+        if (request.SalePrice.HasValue)
+        {
+            if (request.SalePrice.Value < 0 || request.SalePrice.Value >= product.BasePrice)
+                throw new ArgumentException("Sale price must be less than the base price.");
+            product.SalePrice = request.SalePrice;
+        }
+
+        if (request.CategoryId.HasValue)
+        {
+            if (!await db.Categories.AnyAsync(c => c.Id == request.CategoryId.Value && c.StoreId == store.Id))
+                throw new NotFoundException("Category not found.");
+            product.CategoryId = request.CategoryId;
+        }
+
+        if (request.IsActive.HasValue) product.IsActive = request.IsActive.Value;
+
+        await db.SaveChangesAsync();
+        return product.ToDetailDto();
+    }
+
+    public async Task DeleteAdminAsync(Guid merchantId, Guid id)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        var product = await db.Products.Include(p => p.Variants)
+            .FirstOrDefaultAsync(p => p.Id == id && p.StoreId == store.Id)
+            ?? throw new NotFoundException("Product not found.");
+
+        var variantIds = product.Variants.Select(v => v.Id).ToList();
+        if (variantIds.Count > 0 && await db.OrderItems.AnyAsync(oi => variantIds.Contains(oi.VariantId)))
+            throw new ConflictException("Cannot delete a product with variants referenced by existing orders.");
+
+        if (await db.ProductRelations.AnyAsync(r => r.RelatedProductId == id))
+            throw new ConflictException("Cannot delete a product that another product has manually related to it — remove it from that product's related list first.");
+
+        db.Products.Remove(product);
+        await db.SaveChangesAsync();
+    }
+
     public async Task<ProductDetailResponse> DuplicateAsync(string clerkUserId, Guid id)
     {
         var original = await GetOwnProductAsync(clerkUserId, id);
@@ -472,6 +600,20 @@ public class ProductService(AppDbContext db, StoreService storeService)
     internal async Task<Product> GetOwnProductAsync(string clerkUserId, Guid productId)
     {
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
+
+        return await db.Products
+            .Include(p => p.Images)
+            .Include(p => p.Options).ThenInclude(o => o.Values)
+            .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
+            .FirstOrDefaultAsync(p => p.Id == productId && p.StoreId == store.Id)
+            ?? throw new NotFoundException("Product not found.");
+    }
+
+    // Admin-scoped equivalent of GetOwnProductAsync — resolves by merchantId instead of the
+    // caller's own Clerk identity.
+    internal async Task<Product> GetProductForMerchantAsync(Guid merchantId, Guid productId)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
 
         return await db.Products
             .Include(p => p.Images)

@@ -11,7 +11,8 @@ public record StoreResponse(
     DateTimeOffset CreatedAt,
     string? CustomDomain,
     string? ThemeOverride,
-    bool ThemeOverrideEnabled
+    bool ThemeOverrideEnabled,
+    bool IsProspect
 );
 
 public record CreateStoreRequest(string Slug, string Name, string? ThemeId, string? ThemeConfig);

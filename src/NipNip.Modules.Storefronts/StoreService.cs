@@ -26,17 +26,49 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
 
     public async Task<StoreResponse?> GetByMerchantIdAdminAsync(Guid merchantId)
     {
-        var store = await db.Stores.FirstOrDefaultAsync(s => s.MerchantId == merchantId);
-        return store?.ToDto();
+        var store = await db.Stores.Include(s => s.Merchant).FirstOrDefaultAsync(s => s.MerchantId == merchantId);
+        return store is null ? null : store.ToDto(store.Merchant.IsProspect);
     }
 
     public async Task<StoreResponse> CreateAdminAsync(Guid merchantId, CreateStoreRequest request)
     {
-        if (!await db.Merchants.AnyAsync(m => m.Id == merchantId))
-            throw new NotFoundException("Merchant not found.");
+        var merchant = await db.Merchants.FindAsync(merchantId)
+            ?? throw new NotFoundException("Merchant not found.");
 
         var store = await CreateForMerchantAsync(merchantId, request);
-        return store.ToDto();
+        return store.ToDto(merchant.IsProspect);
+    }
+
+    public async Task<StoreResponse> UpdateAdminAsync(Guid merchantId, UpdateStoreRequest request)
+    {
+        var store = await db.Stores.Include(s => s.Merchant).FirstOrDefaultAsync(s => s.MerchantId == merchantId)
+            ?? throw new NotFoundException("This merchant doesn't have a store yet.");
+
+        if (request.Name is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Name cannot be empty.");
+            store.Name = request.Name.Trim();
+        }
+
+        if (request.ThemeId is not null)
+        {
+            if (!KnownThemeIds.Contains(request.ThemeId))
+                throw new ArgumentException($"ThemeId must be one of: {string.Join(", ", KnownThemeIds)}.");
+            store.ThemeId = request.ThemeId;
+        }
+
+        if (request.ThemeConfig is not null)
+        {
+            ValidateThemeConfig(request.ThemeConfig);
+            store.ThemeConfig = request.ThemeConfig;
+        }
+
+        if (request.IsActive.HasValue) store.IsActive = request.IsActive.Value;
+        if (request.AffiliateEnabled.HasValue) store.AffiliateEnabled = request.AffiliateEnabled.Value;
+
+        await db.SaveChangesAsync();
+        return store.ToDto(store.Merchant.IsProspect);
     }
 
     private async Task<Store> CreateForMerchantAsync(Guid merchantId, CreateStoreRequest request)
@@ -137,10 +169,10 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
 
     public async Task<StoreResponse> GetBySlugAsync(string slug)
     {
-        var store = await db.Stores.FirstOrDefaultAsync(s => s.Slug == slug && s.IsActive)
+        var store = await db.Stores.Include(s => s.Merchant).FirstOrDefaultAsync(s => s.Slug == slug && s.IsActive)
             ?? throw new NotFoundException($"Store '{slug}' not found.");
 
-        return store.ToDto();
+        return store.ToDto(store.Merchant.IsProspect);
     }
 
     // Backs the root-level sitemap index — every active store belonging to a public, active,
@@ -239,6 +271,15 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
 
         return await db.Stores.FirstOrDefaultAsync(s => s.MerchantId == merchant.Id)
             ?? throw new NotFoundException("You don't have a store yet.");
+    }
+
+    // Admin-scoped equivalent of GetOwnStoreAsync — resolves by merchantId directly instead of
+    // via the caller's own Clerk identity, for admin endpoints that manage a merchant's store
+    // (products, categories, branding) on their behalf, e.g. building out a prospect's demo store.
+    internal async Task<Store> GetStoreForMerchantAsync(Guid merchantId)
+    {
+        return await db.Stores.FirstOrDefaultAsync(s => s.MerchantId == merchantId)
+            ?? throw new NotFoundException("This merchant doesn't have a store yet.");
     }
 
     private static void ValidateThemeConfig(string? themeConfig)

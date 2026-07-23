@@ -18,6 +18,14 @@ public class Merchant
     public bool IsHighlighted { get; set; } = false;
     public bool IsTest { get; set; } = false;
     public bool IsPublic { get; set; } = true;
+
+    // A sales-pitch demo store the admin builds out for a potential customer, before that
+    // customer has a real Clerk account — see NipNip.Api's admin prospect endpoints. Never
+    // shown in any public/creator-facing listing; the storefront itself is only reachable by
+    // a signed-in admin via /preview/{slug}. ClerkUserId is a generated placeholder until
+    // promotion, when an admin reassigns it to the real customer's Clerk user ID.
+    public bool IsProspect { get; set; } = false;
+
     public DateTimeOffset CreatedAt { get; set; }
 
     // AI product-photo generation usage, reset whenever AiImageGenerationsPeriod no longer

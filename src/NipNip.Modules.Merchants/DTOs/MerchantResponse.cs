@@ -16,6 +16,7 @@ public record MerchantResponse(
     bool IsHighlighted,
     bool IsTest,
     bool IsPublic,
+    bool IsProspect,
     bool IsApprovedForViewer,
     DateTimeOffset CreatedAt
 );

@@ -27,6 +27,9 @@ public class AdminController(
     TrackingService trackingService,
     PayoutService payoutService,
     StoreService storeService,
+    ProductService productService,
+    CategoryService categoryService,
+    ProductImageService productImageService,
     AppDbContext db) : ControllerBase
 {
     // --- Stats ---
@@ -184,6 +187,113 @@ public class AdminController(
         return Ok(await storeService.SetThemeOverrideAdminAsync(merchantId, request));
     }
 
+    [HttpPut("merchants/{merchantId:guid}/store")]
+    public async Task<ActionResult<StoreResponse>> UpdateMerchantStore(
+        Guid merchantId, [FromBody] UpdateStoreRequest request)
+    {
+        return Ok(await storeService.UpdateAdminAsync(merchantId, request));
+    }
+
+    // --- Prospects (admin-built sales-demo stores — see Merchant.IsProspect) ---
+
+    [HttpPost("prospects")]
+    public async Task<ActionResult<ProspectResponse>> CreateProspect([FromBody] CreateProspectRequest request)
+    {
+        var merchant = await merchantService.CreateProspectMerchantAsync(request.Name, request.Slug);
+        var store = await storeService.CreateAdminAsync(
+            merchant.Id,
+            new CreateStoreRequest(request.Slug, request.Name, ThemeId: "minimal", ThemeConfig: null));
+
+        return Ok(new ProspectResponse(merchant.ToDto(), store));
+    }
+
+    [HttpGet("prospects")]
+    public async Task<ActionResult<PaginatedResult<MerchantResponse>>> GetAllProspects(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        return Ok(await merchantService.GetAllProspectsAdminAsync(page, pageSize));
+    }
+
+    [HttpPut("merchants/{id:guid}/promote")]
+    public async Task<ActionResult<MerchantResponse>> PromoteProspect(Guid id, [FromBody] PromoteProspectRequest request)
+    {
+        return Ok(await merchantService.PromoteProspectAsync(id, request.ClerkUserId));
+    }
+
+    // --- Prospect products/categories (admin manages these on the prospect's behalf, since a
+    // prospect has no real Clerk account of its own to sign in and use the normal merchant
+    // dashboard with) ---
+
+    [HttpGet("merchants/{merchantId:guid}/products")]
+    public async Task<ActionResult<PaginatedResult<ProductSummaryResponse>>> GetMerchantProducts(
+        Guid merchantId, [FromQuery] PaginatedRequest pagination)
+    {
+        return Ok(await productService.GetAllAdminForMerchantAsync(merchantId, pagination));
+    }
+
+    [HttpPost("merchants/{merchantId:guid}/products")]
+    public async Task<ActionResult<ProductDetailResponse>> CreateMerchantProduct(
+        Guid merchantId, [FromBody] CreateProductRequest request)
+    {
+        return Ok(await productService.CreateAdminAsync(merchantId, request));
+    }
+
+    [HttpPut("merchants/{merchantId:guid}/products/{productId:guid}")]
+    public async Task<ActionResult<ProductDetailResponse>> UpdateMerchantProduct(
+        Guid merchantId, Guid productId, [FromBody] UpdateProductRequest request)
+    {
+        return Ok(await productService.UpdateAdminAsync(merchantId, productId, request));
+    }
+
+    [HttpDelete("merchants/{merchantId:guid}/products/{productId:guid}")]
+    public async Task<IActionResult> DeleteMerchantProduct(Guid merchantId, Guid productId)
+    {
+        await productService.DeleteAdminAsync(merchantId, productId);
+        return NoContent();
+    }
+
+    [HttpPost("merchants/{merchantId:guid}/products/{productId:guid}/images")]
+    public async Task<ActionResult<ProductImageResponse>> AddMerchantProductImage(
+        Guid merchantId, Guid productId, [FromBody] CreateProductImageRequest request)
+    {
+        return Ok(await productImageService.CreateAdminAsync(merchantId, productId, request));
+    }
+
+    [HttpDelete("merchants/{merchantId:guid}/products/{productId:guid}/images/{imageId:guid}")]
+    public async Task<IActionResult> DeleteMerchantProductImage(Guid merchantId, Guid productId, Guid imageId)
+    {
+        await productImageService.DeleteAdminAsync(merchantId, productId, imageId);
+        return NoContent();
+    }
+
+    [HttpGet("merchants/{merchantId:guid}/categories")]
+    public async Task<ActionResult<List<CategoryResponse>>> GetMerchantCategories(Guid merchantId)
+    {
+        return Ok(await categoryService.GetAllAdminForMerchantAsync(merchantId));
+    }
+
+    [HttpPost("merchants/{merchantId:guid}/categories")]
+    public async Task<ActionResult<CategoryResponse>> CreateMerchantCategory(
+        Guid merchantId, [FromBody] CreateCategoryRequest request)
+    {
+        return Ok(await categoryService.CreateAdminAsync(merchantId, request));
+    }
+
+    [HttpPut("merchants/{merchantId:guid}/categories/{categoryId:guid}")]
+    public async Task<ActionResult<CategoryResponse>> UpdateMerchantCategory(
+        Guid merchantId, Guid categoryId, [FromBody] UpdateCategoryRequest request)
+    {
+        return Ok(await categoryService.UpdateAdminAsync(merchantId, categoryId, request));
+    }
+
+    [HttpDelete("merchants/{merchantId:guid}/categories/{categoryId:guid}")]
+    public async Task<IActionResult> DeleteMerchantCategory(Guid merchantId, Guid categoryId)
+    {
+        await categoryService.DeleteAdminAsync(merchantId, categoryId);
+        return NoContent();
+    }
+
     // --- Creators ---
 
     [HttpGet("creators")]
@@ -286,3 +396,10 @@ public record AdminCreateMerchantRequest(
     string? Description,
     string? LogoUrl
 );
+
+public record CreateProspectRequest(string Name, string Slug);
+
+public record ProspectResponse(MerchantResponse Merchant, StoreResponse Store);
+
+/// <summary>Omit ClerkUserId to just unflag the prospect; pass it to also hand ownership to the real customer's Clerk account.</summary>
+public record PromoteProspectRequest(string? ClerkUserId);

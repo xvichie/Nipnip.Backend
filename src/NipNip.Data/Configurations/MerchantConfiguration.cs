@@ -26,6 +26,7 @@ public class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         builder.Property(m => m.Balance).HasColumnType("decimal(18,2)");
         builder.Property(m => m.IsActive).HasDefaultValue(true);
         builder.Property(m => m.IsPublic).HasDefaultValue(true);
+        builder.Property(m => m.IsProspect).HasDefaultValue(false);
 
         builder.Property(m => m.AiImageGenerationsUsed).HasDefaultValue(0);
         builder.Property(m => m.AiImageGenerationsPeriod).HasDefaultValue("").HasMaxLength(7);

@@ -159,7 +159,7 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         var canSeeTest = await CanSeeTestMerchantsAsync(callerClerkUserId);
 
         var result = await db.Merchants
-            .Where(m => m.IsActive && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
+            .Where(m => m.IsActive && !m.IsProspect && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             .Where(m => canSeeTest || !m.IsTest)
             .OrderBy(m => m.Name)
             .ToPaginatedResultAsync(request);
@@ -178,7 +178,7 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         // any sale a creator drives there would go untracked and uncompensated. Merchants with no
         // storefront at all (WooCommerce/Shopify/custom-site only) are unaffected by this check.
         var merchants = await db.Merchants
-            .Where(m => m.IsActive && m.IsHighlighted && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
+            .Where(m => m.IsActive && m.IsHighlighted && !m.IsProspect && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             .Where(m => canSeeTest || !m.IsTest)
             .OrderBy(m => m.Name)
             .ToListAsync();
@@ -197,6 +197,84 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         return merchant.ToDto();
     }
 
+    // --- Prospects (admin-built sales-demo stores — see Merchant.IsProspect) ---
+
+    // Returns the entity (not a DTO) so the caller can immediately create the paired Store
+    // using merchant.Id — MerchantService intentionally doesn't depend on StoreService, so
+    // that orchestration lives in the admin controller.
+    public async Task<Merchant> CreateProspectMerchantAsync(string name, string slug)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Name is required.");
+
+        if (string.IsNullOrWhiteSpace(slug))
+            throw new ArgumentException("Slug is required.");
+
+        if (!SlugRegex.IsMatch(slug))
+            throw new ArgumentException("Slug must be lowercase alphanumeric with optional hyphens and cannot start with a hyphen.");
+
+        if (await db.Merchants.AnyAsync(m => m.Slug == slug))
+            throw new ConflictException($"Slug '{slug}' is already taken.");
+
+        var merchant = new Merchant
+        {
+            Id = Guid.NewGuid(),
+            // No real Clerk account exists yet — a placeholder that can never collide with an
+            // actual Clerk user ID (their IDs look like "user_xxx") until PromoteProspectAsync
+            // reassigns it.
+            ClerkUserId = $"prospect_{Guid.NewGuid():N}",
+            Name = name.Trim(),
+            Slug = slug,
+            CommissionPercent = 0,
+            ApiKey = Guid.NewGuid().ToString("N"),
+            Balance = 0m,
+            IsActive = true,
+            IsPublic = false,
+            IsProspect = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+
+        db.Merchants.Add(merchant);
+        await db.SaveChangesAsync();
+
+        return merchant;
+    }
+
+    public async Task<PaginatedResult<MerchantResponse>> GetAllProspectsAdminAsync(int page, int pageSize)
+    {
+        var result = await db.Merchants
+            .Where(m => m.IsProspect)
+            .OrderByDescending(m => m.CreatedAt)
+            .ToPaginatedResultAsync(page, pageSize);
+        return result.Map(m => m.ToDto());
+    }
+
+    // Flips a prospect over to a real merchant. Passing a new Clerk user ID reassigns ownership
+    // to the actual customer's account (their first login then lands them straight in their
+    // now-live merchant dashboard, with everything the admin already built still in place);
+    // omit it to just unflag the prospect and reassign ownership separately later.
+    public async Task<MerchantResponse> PromoteProspectAsync(Guid id, string? newClerkUserId)
+    {
+        var merchant = await db.Merchants.FindAsync(id)
+            ?? throw new NotFoundException("Merchant not found.");
+
+        if (!merchant.IsProspect)
+            throw new ConflictException("This merchant is not a prospect.");
+
+        if (!string.IsNullOrWhiteSpace(newClerkUserId))
+        {
+            if (await db.Merchants.AnyAsync(m => m.Id != id && m.ClerkUserId == newClerkUserId))
+                throw new ConflictException("That Clerk user is already linked to a different merchant account.");
+            merchant.ClerkUserId = newClerkUserId;
+        }
+
+        merchant.IsProspect = false;
+        merchant.IsPublic = true;
+        await db.SaveChangesAsync();
+
+        return merchant.ToDto();
+    }
+
     public async Task<MerchantResponse> ToggleHighlightAsync(Guid id)
     {
         var merchant = await db.Merchants.FindAsync(id)
@@ -209,7 +287,7 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
     public async Task<MerchantResponse> GetBySlugAsync(string slug, string? callerClerkUserId)
     {
         var merchant = await db.Merchants
-            .FirstOrDefaultAsync(m => m.Slug == slug && m.IsActive
+            .FirstOrDefaultAsync(m => m.Slug == slug && m.IsActive && !m.IsProspect
                 && !db.Stores.Any(s => s.MerchantId == m.Id && !s.AffiliateEnabled))
             ?? throw new NotFoundException($"Merchant '{slug}' not found.");
 

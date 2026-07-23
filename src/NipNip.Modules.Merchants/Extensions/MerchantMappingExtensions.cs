@@ -22,6 +22,7 @@ public static class MerchantMappingExtensions
             merchant.IsHighlighted,
             merchant.IsTest,
             merchant.IsPublic,
+            merchant.IsProspect,
             isApprovedForViewer,
             merchant.CreatedAt
         );

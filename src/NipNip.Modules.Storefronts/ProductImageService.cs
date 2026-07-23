@@ -43,6 +43,42 @@ public class ProductImageService(AppDbContext db, ProductService productService)
         await db.SaveChangesAsync();
     }
 
+    // Admin-scoped — see ProductService's admin methods for why this isn't merged into the
+    // self-service one above.
+    public async Task<ProductImageResponse> CreateAdminAsync(Guid merchantId, Guid productId, CreateProductImageRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Url))
+            throw new ArgumentException("Url is required.");
+
+        var product = await productService.GetProductForMerchantAsync(merchantId, productId);
+
+        var sortOrder = await db.ProductImages.Where(i => i.ProductId == productId).CountAsync();
+
+        var image = new ProductImage
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            Url = request.Url,
+            SortOrder = sortOrder,
+        };
+
+        db.ProductImages.Add(image);
+        await db.SaveChangesAsync();
+
+        return image.ToDto();
+    }
+
+    public async Task DeleteAdminAsync(Guid merchantId, Guid productId, Guid imageId)
+    {
+        await productService.GetProductForMerchantAsync(merchantId, productId);
+
+        var image = await db.ProductImages.FirstOrDefaultAsync(i => i.Id == imageId && i.ProductId == productId)
+            ?? throw new NotFoundException("Product image not found.");
+
+        db.ProductImages.Remove(image);
+        await db.SaveChangesAsync();
+    }
+
     public async Task ReorderAsync(string clerkUserId, Guid productId, List<Guid> imageIds)
     {
         await productService.GetOwnProductAsync(clerkUserId, productId);

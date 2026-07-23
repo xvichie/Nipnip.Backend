@@ -156,4 +156,108 @@ public class CategoryService(AppDbContext db, StoreService storeService)
         db.Categories.Remove(category);
         await db.SaveChangesAsync();
     }
+
+    // --- Admin-scoped (building out a prospect's demo store) — resolves by merchantId instead
+    // of the caller's own Clerk identity. See ProductService's admin methods for why these
+    // aren't merged into the self-service ones above. ---
+
+    public async Task<List<CategoryResponse>> GetAllAdminForMerchantAsync(Guid merchantId)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        var categories = await db.Categories
+            .Where(c => c.StoreId == store.Id)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+
+        return categories.Select(c => c.ToDto()).ToList();
+    }
+
+    public async Task<CategoryResponse> CreateAdminAsync(Guid merchantId, CreateCategoryRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Name is required.");
+
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        if (request.ParentCategoryId.HasValue &&
+            !await db.Categories.AnyAsync(c => c.Id == request.ParentCategoryId.Value && c.StoreId == store.Id))
+            throw new NotFoundException("Parent category not found.");
+
+        ValidateDefaultOptions(request.DefaultOptions);
+
+        var category = new Category
+        {
+            Id = Guid.NewGuid(),
+            StoreId = store.Id,
+            ParentCategoryId = request.ParentCategoryId,
+            Name = request.Name.Trim(),
+            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
+            IconUrl = NormalizeIcon(request.IconUrl),
+            IconKey = NormalizeIcon(request.IconKey),
+            IconEmoji = NormalizeIcon(request.IconEmoji),
+            DefaultOptions = request.DefaultOptions ?? "[]",
+        };
+
+        db.Categories.Add(category);
+        await db.SaveChangesAsync();
+
+        return category.ToDto();
+    }
+
+    public async Task<CategoryResponse> UpdateAdminAsync(Guid merchantId, Guid id, UpdateCategoryRequest request)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id && c.StoreId == store.Id)
+            ?? throw new NotFoundException("Category not found.");
+
+        if (request.Name is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Name cannot be empty.");
+            category.Name = request.Name.Trim();
+            category.Slug = await GenerateUniqueSlugAsync(store.Id, category.Name, category.Id);
+        }
+
+        if (request.ParentCategoryId.HasValue)
+        {
+            if (request.ParentCategoryId.Value == id)
+                throw new ArgumentException("A category cannot be its own parent.");
+
+            if (!await db.Categories.AnyAsync(c => c.Id == request.ParentCategoryId.Value && c.StoreId == store.Id))
+                throw new NotFoundException("Parent category not found.");
+        }
+
+        category.ParentCategoryId = request.ParentCategoryId;
+        category.IconUrl = NormalizeIcon(request.IconUrl);
+        category.IconKey = NormalizeIcon(request.IconKey);
+        category.IconEmoji = NormalizeIcon(request.IconEmoji);
+
+        if (request.DefaultOptions is not null)
+        {
+            ValidateDefaultOptions(request.DefaultOptions);
+            category.DefaultOptions = request.DefaultOptions;
+        }
+
+        await db.SaveChangesAsync();
+        return category.ToDto();
+    }
+
+    public async Task DeleteAdminAsync(Guid merchantId, Guid id)
+    {
+        var store = await storeService.GetStoreForMerchantAsync(merchantId);
+
+        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id && c.StoreId == store.Id)
+            ?? throw new NotFoundException("Category not found.");
+
+        if (await db.Products.AnyAsync(p => p.CategoryId == id))
+            throw new ConflictException("Cannot delete a category that still has products assigned to it.");
+
+        if (await db.Categories.AnyAsync(c => c.ParentCategoryId == id))
+            throw new ConflictException("Cannot delete a category that still has subcategories.");
+
+        db.Categories.Remove(category);
+        await db.SaveChangesAsync();
+    }
 }
