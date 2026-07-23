@@ -39,3 +39,10 @@ public record CreateProductRequest(string Name, string? Description, string? Vid
 public record UpdateProductRequest(string? Name, string? Description, string? VideoUrl, decimal? BasePrice, decimal? SalePrice, Guid? CategoryId, bool? IsActive);
 
 public record ProductPriceRangeResponse(decimal Min, decimal Max);
+
+/// <summary>Distinct option name + the values it takes across a store's (optionally category-scoped) active products.</summary>
+public record ProductFacetResponse(string Name, List<string> Values);
+
+/// <summary>One group of a listing-page option filter — e.g. Name="ზომა", Values=["35","36"]. Selected values within
+/// a group are OR'd together; separate groups (passed as a JSON array) are AND'd together by the caller.</summary>
+public record OptionFilterInput(string Name, List<string> Values);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NipNip.Data;
 using NipNip.Data.Entities;
@@ -59,7 +60,8 @@ public class ProductService(AppDbContext db, StoreService storeService)
         decimal? minPrice = null,
         decimal? maxPrice = null,
         string? sortBy = null,
-        string? sortDir = null)
+        string? sortDir = null,
+        string? optionFilters = null)
     {
         var store = await db.Stores.FirstOrDefaultAsync(s => s.Slug == slug && s.IsActive)
             ?? throw new NotFoundException($"Store '{slug}' not found.");
@@ -94,6 +96,17 @@ public class ProductService(AppDbContext db, StoreService storeService)
         if (maxPrice.HasValue)
             query = query.Where(p => (p.SalePrice ?? p.BasePrice) <= maxPrice.Value);
 
+        // Each group (one per selected option, e.g. "ზომა") is AND'd with the others via the
+        // separate .Where calls below; the values within a group are OR'd via .Any(...Contains).
+        foreach (var group in ParseOptionFilters(optionFilters))
+        {
+            var name = group.Name;
+            var values = group.Values;
+            if (values.Count == 0) continue;
+            query = query.Where(p => p.Variants.Any(v => v.OptionValues.Any(ov =>
+                ov.OptionValue.ProductOption.Name == name && values.Contains(ov.OptionValue.Value))));
+        }
+
         var descending = !string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
         query = sortBy?.ToLowerInvariant() switch
         {
@@ -106,6 +119,61 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
         var result = await query.ToPaginatedResultAsync(pagination);
         return result.Map(p => p.ToSummaryDto());
+    }
+
+    // Malformed/empty input yields no filters rather than an error — a broken filter state on
+    // the listing page should show everything, not 500.
+    private static List<OptionFilterInput> ParseOptionFilters(string? optionFilters)
+    {
+        if (string.IsNullOrWhiteSpace(optionFilters)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<OptionFilterInput>>(optionFilters) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    public async Task<List<ProductFacetResponse>> GetFacetsForStoreSlugAsync(string slug, string? categorySlug)
+    {
+        var store = await db.Stores.FirstOrDefaultAsync(s => s.Slug == slug && s.IsActive)
+            ?? throw new NotFoundException($"Store '{slug}' not found.");
+
+        var query = db.Products.Where(p => p.StoreId == store.Id && p.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(categorySlug))
+        {
+            var category = await db.Categories.FirstOrDefaultAsync(c => c.StoreId == store.Id && c.Slug == categorySlug);
+            if (category is not null)
+                query = query.Where(p => p.CategoryId == category.Id);
+            else if (categorySlug == "sale")
+                query = query.Where(p => p.SalePrice != null || p.Variants.Any(v => v.SalePrice != null));
+            else
+                return [];
+        }
+
+        var raw = await query
+            .SelectMany(p => p.Options)
+            .SelectMany(o => o.Values, (o, v) => new { OptionName = o.Name, Value = v.Value })
+            .Distinct()
+            .ToListAsync();
+
+        return raw
+            .GroupBy(x => x.OptionName)
+            .Select(g => new ProductFacetResponse(g.Key, OrderFacetValues(g.Select(x => x.Value).Distinct().ToList())))
+            .ToList();
+    }
+
+    // Numeric-looking values (shoe/clothing sizes: "35", "36"...) sort numerically; everything
+    // else (S/M/L/XL, colors) keeps first-seen order rather than alphabetizing, since alphabetical
+    // would scramble "S, M, L, XL" into "L, M, S, XL".
+    private static List<string> OrderFacetValues(List<string> values)
+    {
+        if (values.Count > 0 && values.All(v => decimal.TryParse(v, out _)))
+            return values.OrderBy(v => decimal.Parse(v)).ToList();
+        return values;
     }
 
     public async Task<ProductPriceRangeResponse> GetPriceRangeForStoreSlugAsync(string slug, string? categorySlug)

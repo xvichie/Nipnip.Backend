@@ -23,9 +23,10 @@ public class ProductController(ProductService productService) : ControllerBase
         [FromQuery] decimal? minPrice,
         [FromQuery] decimal? maxPrice,
         [FromQuery] string? sortBy,
-        [FromQuery] string? sortDir)
+        [FromQuery] string? sortDir,
+        [FromQuery] string? optionFilters)
     {
-        return Ok(await productService.GetAllForStoreSlugAsync(slug, pagination, categorySlug, search, minPrice, maxPrice, sortBy, sortDir));
+        return Ok(await productService.GetAllForStoreSlugAsync(slug, pagination, categorySlug, search, minPrice, maxPrice, sortBy, sortDir, optionFilters));
     }
 
     [HttpGet("/api/stores/{slug}/products/price-range")]
@@ -34,6 +35,14 @@ public class ProductController(ProductService productService) : ControllerBase
     public async Task<ActionResult<ProductPriceRangeResponse>> GetPriceRangePublic(string slug, [FromQuery] string? categorySlug)
     {
         return Ok(await productService.GetPriceRangeForStoreSlugAsync(slug, categorySlug));
+    }
+
+    [HttpGet("/api/stores/{slug}/products/facets")]
+    [AllowAnonymous]
+    [EnableCors("Public")]
+    public async Task<ActionResult<List<ProductFacetResponse>>> GetFacetsPublic(string slug, [FromQuery] string? categorySlug)
+    {
+        return Ok(await productService.GetFacetsForStoreSlugAsync(slug, categorySlug));
     }
 
     [HttpGet("/api/stores/{slug}/products/{productSlug}")]
