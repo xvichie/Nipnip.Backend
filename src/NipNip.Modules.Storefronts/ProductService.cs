@@ -96,15 +96,16 @@ public class ProductService(AppDbContext db, StoreService storeService)
         if (maxPrice.HasValue)
             query = query.Where(p => (p.SalePrice ?? p.BasePrice) <= maxPrice.Value);
 
-        // Each group (one per selected option, e.g. "ზომა") is AND'd with the others via the
-        // separate .Where calls below; the values within a group are OR'd via .Any(...Contains).
+        // Matched against the product's own declared options/values (not Variants) — a merchant
+        // can define "ზომა: 42, 43" on a product without ever using the separate bulk-variant
+        // generator, and filtering should still find those products. Each group (one per selected
+        // option) is AND'd via the separate .Where calls; values within a group are OR'd via .Any().
         foreach (var group in ParseOptionFilters(optionFilters))
         {
             var name = group.Name;
             var values = group.Values;
-            if (values.Count == 0) continue;
-            query = query.Where(p => p.Variants.Any(v => v.OptionValues.Any(ov =>
-                ov.OptionValue.ProductOption.Name == name && values.Contains(ov.OptionValue.Value))));
+            query = query.Where(p => p.Options.Any(o =>
+                o.Name == name && o.Values.Any(v => values.Contains(v.Value))));
         }
 
         var descending = !string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
