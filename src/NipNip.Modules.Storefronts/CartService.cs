@@ -24,6 +24,7 @@ public class CartService(
     TbcService tbcService,
     BogService bogService,
     CityPayService cityPayService,
+    StoreDiscountCodeService discountCodeService,
     ILogger<CartService> logger)
 {
     public async Task<CartResponse> GetCartAsync(string slug, string? sessionId)
@@ -233,9 +234,14 @@ public class CartService(
             ? ExtractShipping(store.ThemeConfig, request.ShippingZoneId, subtotal)
             : (0m, null);
 
+        var (discountAmount, appliedDiscountCode) = await discountCodeService.ApplyForCheckoutAsync(
+            cart.StoreId, request.DiscountCode, subtotal);
+
         order.ShippingFee = shippingFee;
         order.ShippingZoneName = shippingZoneName;
-        order.Total = subtotal + shippingFee;
+        order.DiscountCode = appliedDiscountCode;
+        order.DiscountAmount = discountAmount;
+        order.Total = subtotal + shippingFee - discountAmount;
 
         var emailItems = cart.Items.Select(i => new OrderConfirmationEmailItem(
             i.Variant.Product.Name,

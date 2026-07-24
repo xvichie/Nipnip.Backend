@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<OrderNote> OrderNotes => Set<OrderNote>();
+    public DbSet<StoreDiscountCode> StoreDiscountCodes => Set<StoreDiscountCode>();
     public DbSet<StorePage> StorePages => Set<StorePage>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<Conversation> Conversations => Set<Conversation>();

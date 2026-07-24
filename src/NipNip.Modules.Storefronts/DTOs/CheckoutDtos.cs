@@ -10,7 +10,8 @@ public record CheckoutRequest(
     string PaymentMethod,
     string? ShippingZoneId,
     string? Ref,
-    string? CustomerNote = null
+    string? CustomerNote = null,
+    string? DiscountCode = null
 );
 
 public record OrderResponse(
@@ -28,5 +29,7 @@ public record OrderResponse(
     string? ShippingZoneName,
     DateTimeOffset CreatedAt,
     string? RedirectUrl = null,
-    string? CustomerNote = null
+    string? CustomerNote = null,
+    string? DiscountCode = null,
+    decimal DiscountAmount = 0m
 );
