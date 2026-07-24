@@ -145,6 +145,67 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         return merchant.ToDto();
     }
 
+    // Hard-deletes a real merchant and everything linked to it: Store, Categories, Products (with
+    // Images/Options/Variants), Collections, ProductBundles, StoreDiscountCodes, Carts, Orders,
+    // StorePages, ContactMessages, Conversations, KnowledgeBaseSections, MerchantAccessRequests,
+    // the old per-creator DiscountCodes, LinkTreeItems, and tracking data (Clicks/Conversions — the
+    // "affiliate link" data). Payouts are untouched: a Payout belongs to a Creator, not a Merchant,
+    // and can span commissions earned across many merchants.
+    //
+    // Most of the above cascades automatically once the Merchant row is removed, via CASCADE FKs
+    // rooted at Merchant/Store. But a handful of children — OrderItem→Variant, OrderBundleItem→
+    // Bundle, ProductBundleItem→Product, ProductRelation→RelatedProduct, and Category's own
+    // self-referencing ParentCategoryId — are RESTRICT, not CASCADE, and Postgres checks a RESTRICT
+    // FK immediately per row rather than deferring to the end of the whole cascading delete. Left
+    // alone, that makes the final Merchant delete fail as soon as it tries to remove a Product or
+    // Category that one of these still points at. So those have to be cleared by hand, in
+    // dependency order, before the cascade delete at the bottom can run cleanly.
+    public async Task DeleteMerchantPermanentlyAsync(Guid id)
+    {
+        var merchant = await db.Merchants.FindAsync(id)
+            ?? throw new NotFoundException("Merchant not found.");
+
+        var store = await db.Stores.FirstOrDefaultAsync(s => s.MerchantId == id);
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        if (store is not null)
+        {
+            var storeId = store.Id;
+            var productIds = await db.Products.Where(p => p.StoreId == storeId).Select(p => p.Id).ToListAsync();
+
+            // Orders/Carts before Products/Bundles: clears OrderItem→Variant and
+            // OrderBundleItem→Bundle before the Variants/Bundles they point at disappear.
+            await db.Orders.Where(o => o.StoreId == storeId).ExecuteDeleteAsync();
+            await db.Carts.Where(c => c.StoreId == storeId).ExecuteDeleteAsync();
+
+            // Bundles before Products: clears ProductBundleItem→Product.
+            await db.ProductBundles.Where(b => b.StoreId == storeId).ExecuteDeleteAsync();
+
+            if (productIds.Count > 0)
+            {
+                // Both directions, regardless of which store the other side belongs to: clears
+                // ProductRelation→RelatedProduct (the rare case where some other store's product
+                // declared one of this merchant's products as "related").
+                await db.ProductRelations
+                    .Where(r => productIds.Contains(r.ProductId) || productIds.Contains(r.RelatedProductId))
+                    .ExecuteDeleteAsync();
+
+                await db.Products.Where(p => p.StoreId == storeId).ExecuteDeleteAsync();
+            }
+
+            // Clears Category's self-referencing ParentCategoryId restrict — Product→Category is
+            // already safe since every Product in the store is gone by this point.
+            await db.Categories.Where(c => c.StoreId == storeId)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.ParentCategoryId, (Guid?)null));
+        }
+
+        db.Merchants.Remove(merchant);
+        await db.SaveChangesAsync();
+
+        await transaction.CommitAsync();
+    }
+
     public async Task<MerchantResponse> GetMeAsync(string clerkUserId)
     {
         var merchant = await db.Merchants

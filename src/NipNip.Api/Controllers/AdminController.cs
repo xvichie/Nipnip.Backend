@@ -156,6 +156,15 @@ public class AdminController(
         return Ok(await merchantService.DeactivateAsync(id));
     }
 
+    // Hard delete — irreversible, takes the Store and everything linked to it with it. Distinct
+    // route from the plain DELETE above, which only deactivates (IsActive = false).
+    [HttpDelete("merchants/{id:guid}/permanent")]
+    public async Task<IActionResult> DeleteMerchantPermanently(Guid id)
+    {
+        await merchantService.DeleteMerchantPermanentlyAsync(id);
+        return NoContent();
+    }
+
     [HttpPut("merchants/{id:guid}/highlight")]
     public async Task<ActionResult<MerchantResponse>> ToggleMerchantHighlight(Guid id)
     {
@@ -166,6 +175,20 @@ public class AdminController(
     public async Task<ActionResult<MerchantResponse>> ToggleMerchantTest(Guid id)
     {
         return Ok(await merchantService.ToggleTestAsync(id));
+    }
+
+    // Admin "sign in as" support — hands back just enough to mint a Clerk actor token
+    // client-side (see the Next.js /api/admin/impersonate route). Deliberately not part of
+    // MerchantResponse: that DTO is also returned to the merchant about themselves, and
+    // ClerkUserId has no business being echoed back to a non-admin caller.
+    [HttpGet("merchants/{id:guid}/impersonation-info")]
+    public async Task<ActionResult<ImpersonationInfoResponse>> GetMerchantImpersonationInfo(Guid id)
+    {
+        var merchant = await db.Merchants.FindAsync(id)
+            ?? throw new NotFoundException("Merchant not found.");
+        if (merchant.IsProspect || string.IsNullOrEmpty(merchant.ClerkUserId))
+            return BadRequest("This merchant has no linked Clerk account to sign in as.");
+        return Ok(new ImpersonationInfoResponse(merchant.ClerkUserId, merchant.Name));
     }
 
     [HttpGet("merchants/{merchantId:guid}/store")]
@@ -310,6 +333,16 @@ public class AdminController(
 
     // --- Creators ---
 
+    [HttpGet("creators/{id:guid}/impersonation-info")]
+    public async Task<ActionResult<ImpersonationInfoResponse>> GetCreatorImpersonationInfo(Guid id)
+    {
+        var creator = await db.Creators.FindAsync(id)
+            ?? throw new NotFoundException("Creator not found.");
+        if (string.IsNullOrEmpty(creator.ClerkUserId))
+            return BadRequest("This creator has no linked Clerk account to sign in as.");
+        return Ok(new ImpersonationInfoResponse(creator.ClerkUserId, creator.Name));
+    }
+
     [HttpGet("creators")]
     public async Task<ActionResult<PaginatedResult<CreatorResponse>>> GetAllCreators(
         [FromQuery] int page = 1,
@@ -417,3 +450,5 @@ public record ProspectResponse(MerchantResponse Merchant, StoreResponse Store);
 
 /// <summary>Omit ClerkUserId to just unflag the prospect; pass it to also hand ownership to the real customer's Clerk account.</summary>
 public record PromoteProspectRequest(string? ClerkUserId);
+
+public record ImpersonationInfoResponse(string ClerkUserId, string Name);
