@@ -15,7 +15,23 @@ public record CartItemResponse(
     List<CartItemOptionResponse> Options
 );
 
-public record CartResponse(Guid Id, string SessionId, List<CartItemResponse> Items, decimal Total);
+public record CartBundleItemResponse(
+    Guid Id,
+    Guid BundleId,
+    string BundleName,
+    string BundleSlug,
+    string? ImageUrl,
+    decimal BundlePrice,
+    int Quantity
+);
+
+public record CartResponse(
+    Guid Id,
+    string SessionId,
+    List<CartItemResponse> Items,
+    decimal Total,
+    List<CartBundleItemResponse> BundleItems
+);
 
 /// <summary>
 /// OptionValueIds must cover exactly one value per configured product option (empty for
@@ -25,3 +41,7 @@ public record CartResponse(Guid Id, string SessionId, List<CartItemResponse> Ite
 public record AddCartItemRequest(Guid ProductId, List<Guid> OptionValueIds, int Quantity);
 
 public record UpdateCartItemRequest(int Quantity);
+
+public record AddBundleToCartRequest(Guid BundleId, int Quantity);
+
+public record UpdateCartBundleItemRequest(int Quantity);

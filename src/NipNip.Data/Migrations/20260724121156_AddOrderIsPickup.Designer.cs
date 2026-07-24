@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724121156_AddOrderIsPickup")]
+    partial class AddOrderIsPickup
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,31 +47,6 @@ namespace NipNip.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Carts");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.CartBundleItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BundleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CartId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BundleId");
-
-                    b.HasIndex("CartId", "BundleId")
-                        .IsUnique();
-
-                    b.ToTable("CartBundleItems");
                 });
 
             modelBuilder.Entity("NipNip.Data.Entities.CartItem", b =>
@@ -829,33 +807,6 @@ namespace NipNip.Data.Migrations
                     b.ToTable("Orders");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.OrderBundleItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BundleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("PriceAtPurchase")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BundleId");
-
-                    b.HasIndex("OrderId");
-
-                    b.ToTable("OrderBundleItems");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.OrderItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1026,68 +977,6 @@ namespace NipNip.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Products");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ProductBundle", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("BundlePrice")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ImageUrl")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("StoreId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StoreId", "Slug")
-                        .IsUnique();
-
-                    b.ToTable("ProductBundles");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ProductBundleItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BundleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("BundleId", "ProductId")
-                        .IsUnique();
-
-                    b.ToTable("ProductBundleItems");
                 });
 
             modelBuilder.Entity("NipNip.Data.Entities.ProductCollection", b =>
@@ -1536,25 +1425,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Store");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.CartBundleItem", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.ProductBundle", "Bundle")
-                        .WithMany()
-                        .HasForeignKey("BundleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("NipNip.Data.Entities.Cart", "Cart")
-                        .WithMany("BundleItems")
-                        .HasForeignKey("CartId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Bundle");
-
-                    b.Navigation("Cart");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.CartItem", b =>
                 {
                     b.HasOne("NipNip.Data.Entities.Cart", "Cart")
@@ -1770,25 +1640,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Store");
                 });
 
-            modelBuilder.Entity("NipNip.Data.Entities.OrderBundleItem", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.ProductBundle", "Bundle")
-                        .WithMany()
-                        .HasForeignKey("BundleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NipNip.Data.Entities.Order", "Order")
-                        .WithMany("BundleItems")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Bundle");
-
-                    b.Navigation("Order");
-                });
-
             modelBuilder.Entity("NipNip.Data.Entities.OrderItem", b =>
                 {
                     b.HasOne("NipNip.Data.Entities.Order", "Order")
@@ -1857,36 +1708,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Store");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ProductBundle", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.Store", "Store")
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Store");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ProductBundleItem", b =>
-                {
-                    b.HasOne("NipNip.Data.Entities.ProductBundle", "Bundle")
-                        .WithMany("Items")
-                        .HasForeignKey("BundleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("NipNip.Data.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Bundle");
-
-                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("NipNip.Data.Entities.ProductCollection", b =>
@@ -2025,8 +1846,6 @@ namespace NipNip.Data.Migrations
 
             modelBuilder.Entity("NipNip.Data.Entities.Cart", b =>
                 {
-                    b.Navigation("BundleItems");
-
                     b.Navigation("Items");
                 });
 
@@ -2070,8 +1889,6 @@ namespace NipNip.Data.Migrations
 
             modelBuilder.Entity("NipNip.Data.Entities.Order", b =>
                 {
-                    b.Navigation("BundleItems");
-
                     b.Navigation("Items");
 
                     b.Navigation("Notes");
@@ -2086,11 +1903,6 @@ namespace NipNip.Data.Migrations
                     b.Navigation("ProductCollections");
 
                     b.Navigation("Variants");
-                });
-
-            modelBuilder.Entity("NipNip.Data.Entities.ProductBundle", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("NipNip.Data.Entities.ProductOption", b =>

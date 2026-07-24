@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NipNip.Data;
@@ -553,6 +555,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
         if (await db.ProductRelations.AnyAsync(r => r.RelatedProductId == id))
             throw new ConflictException("Cannot delete a product that another product has manually related to it — remove it from that product's related list first.");
 
+        if (await db.ProductBundleItems.AnyAsync(i => i.ProductId == id))
+            throw new ConflictException("Cannot delete a product that's part of a bundle — remove it from the bundle first.");
+
         db.Products.Remove(product);
         await db.SaveChangesAsync();
     }
@@ -653,8 +658,166 @@ public class ProductService(AppDbContext db, StoreService storeService)
         if (await db.ProductRelations.AnyAsync(r => r.RelatedProductId == id))
             throw new ConflictException("Cannot delete a product that another product has manually related to it — remove it from that product's related list first.");
 
+        if (await db.ProductBundleItems.AnyAsync(i => i.ProductId == id))
+            throw new ConflictException("Cannot delete a product that's part of a bundle — remove it from the bundle first.");
+
         db.Products.Remove(product);
         await db.SaveChangesAsync();
+    }
+
+    private static readonly string[] ExportColumns = ["Name", "Slug", "CategoryName", "BasePrice", "SalePrice", "Description", "IsActive"];
+
+    public async Task<string> ExportCsvAsync(string clerkUserId)
+    {
+        var store = await storeService.GetOwnStoreAsync(clerkUserId);
+
+        var products = await db.Products
+            .Include(p => p.Category)
+            .Where(p => p.StoreId == store.Id)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        var sb = new StringBuilder();
+        sb.AppendLine(CsvUtil.WriteRow(ExportColumns));
+
+        foreach (var p in products)
+        {
+            sb.AppendLine(CsvUtil.WriteRow([
+                p.Name,
+                p.Slug,
+                p.Category?.Name ?? "",
+                p.BasePrice.ToString(CultureInfo.InvariantCulture),
+                p.SalePrice?.ToString(CultureInfo.InvariantCulture) ?? "",
+                p.Description ?? "",
+                p.IsActive.ToString(),
+            ]));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Matches existing products by Slug when the row has one, otherwise by case-insensitive
+    /// Name — so a merchant can re-export, tweak prices in a spreadsheet, and re-import to
+    /// update in bulk, or add brand-new rows (blank Slug) to create products. Variants/images/
+    /// options stay UI-managed — this only covers the flat catalog fields.
+    /// </summary>
+    public async Task<ProductImportResult> ImportCsvAsync(string clerkUserId, string csvContent)
+    {
+        var store = await storeService.GetOwnStoreAsync(clerkUserId);
+        var rows = CsvUtil.ParseRows(csvContent);
+
+        if (rows.Count < 2)
+            throw new ArgumentException("CSV has no data rows.");
+
+        var header = rows[0].Select(h => h.Trim().ToLowerInvariant()).ToList();
+        var nameIdx = header.IndexOf("name");
+        var slugIdx = header.IndexOf("slug");
+        var categoryIdx = header.IndexOf("categoryname");
+        var basePriceIdx = header.IndexOf("baseprice");
+        var salePriceIdx = header.IndexOf("saleprice");
+        var descriptionIdx = header.IndexOf("description");
+        var isActiveIdx = header.IndexOf("isactive");
+
+        if (nameIdx == -1 || basePriceIdx == -1)
+            throw new ArgumentException("CSV must include at least Name and BasePrice columns.");
+
+        var categories = await db.Categories.Where(c => c.StoreId == store.Id).ToListAsync();
+        var existingProducts = await db.Products.Where(p => p.StoreId == store.Id).ToListAsync();
+
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+        var results = new List<ProductImportRowResult>();
+
+        for (var r = 1; r < rows.Count; r++)
+        {
+            var row = rows[r];
+            var rowNumber = r + 1;
+            string Get(int idx) => idx >= 0 && idx < row.Length ? row[idx].Trim() : "";
+
+            var name = Get(nameIdx);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                skipped++;
+                results.Add(new ProductImportRowResult(rowNumber, "", "skipped", "Name is required."));
+                continue;
+            }
+
+            if (!decimal.TryParse(Get(basePriceIdx), NumberStyles.Any, CultureInfo.InvariantCulture, out var basePrice) || basePrice < 0)
+            {
+                skipped++;
+                results.Add(new ProductImportRowResult(rowNumber, name, "skipped", "Invalid or missing BasePrice."));
+                continue;
+            }
+
+            decimal? salePrice = null;
+            var salePriceRaw = Get(salePriceIdx);
+            if (salePriceIdx != -1 && !string.IsNullOrWhiteSpace(salePriceRaw))
+            {
+                if (!decimal.TryParse(salePriceRaw, NumberStyles.Any, CultureInfo.InvariantCulture, out var sp) || sp < 0 || sp >= basePrice)
+                {
+                    skipped++;
+                    results.Add(new ProductImportRowResult(rowNumber, name, "skipped", "SalePrice must be less than BasePrice."));
+                    continue;
+                }
+                salePrice = sp;
+            }
+
+            Guid? categoryId = null;
+            var categoryName = Get(categoryIdx);
+            if (categoryIdx != -1 && !string.IsNullOrWhiteSpace(categoryName))
+            {
+                var match = categories.FirstOrDefault(c => string.Equals(c.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+                if (match is null)
+                    results.Add(new ProductImportRowResult(rowNumber, name, "warning", $"Category '{categoryName}' not found — left uncategorized."));
+                else
+                    categoryId = match.Id;
+            }
+
+            var description = descriptionIdx != -1 ? Get(descriptionIdx) : "";
+            var isActive = isActiveIdx == -1 || !bool.TryParse(Get(isActiveIdx), out var parsedActive) || parsedActive;
+
+            var slug = Get(slugIdx);
+            var existing = !string.IsNullOrWhiteSpace(slug)
+                ? existingProducts.FirstOrDefault(p => p.Slug == slug)
+                : existingProducts.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is not null)
+            {
+                existing.Name = name;
+                existing.BasePrice = basePrice;
+                existing.SalePrice = salePrice;
+                if (categoryId.HasValue) existing.CategoryId = categoryId;
+                if (!string.IsNullOrWhiteSpace(description)) existing.Description = description;
+                existing.IsActive = isActive;
+                updated++;
+                results.Add(new ProductImportRowResult(rowNumber, name, "updated", null));
+            }
+            else
+            {
+                var product = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    StoreId = store.Id,
+                    CategoryId = categoryId,
+                    Name = name,
+                    Slug = await GenerateUniqueSlugAsync(store.Id, name),
+                    Description = string.IsNullOrWhiteSpace(description) ? null : description,
+                    BasePrice = basePrice,
+                    SalePrice = salePrice,
+                    IsActive = isActive,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                };
+                db.Products.Add(product);
+                existingProducts.Add(product);
+                created++;
+                results.Add(new ProductImportRowResult(rowNumber, name, "created", null));
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return new ProductImportResult(created, updated, skipped, results);
     }
 
     private async Task<string> GenerateUniqueSlugAsync(Guid storeId, string name)

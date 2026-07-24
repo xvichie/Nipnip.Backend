@@ -14,6 +14,8 @@ public record OrderItemResponse(
 
 public record OrderNoteResponse(Guid Id, string Content, DateTimeOffset CreatedAt);
 
+public record OrderBundleItemResponse(Guid Id, Guid BundleId, string BundleName, int Quantity, decimal PriceAtPurchase);
+
 public record OrderDetailResponse(
     Guid Id,
     string CustomerName,
@@ -30,6 +32,7 @@ public record OrderDetailResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset? PaymentConfirmedAt,
     List<OrderItemResponse> Items,
+    List<OrderBundleItemResponse> BundleItems,
     List<OrderNoteResponse> Notes,
     int? QuickShipperOrderId,
     string? QuickShipperStatus,
@@ -37,7 +40,8 @@ public record OrderDetailResponse(
     decimal? QuickShipperDeliveryFee,
     string? CustomerNote,
     string? DiscountCode,
-    decimal DiscountAmount
+    decimal DiscountAmount,
+    bool IsPickup
 );
 
 public record UpdateOrderStatusRequest(string Status);

@@ -24,5 +24,15 @@ public static class CartMappingExtensions
                     .ToList()
             )).ToList(),
             cart.Items.Sum(i => (i.Variant.SalePrice ?? i.Variant.Price) * i.Quantity)
+                + cart.BundleItems.Sum(i => i.Bundle.BundlePrice * i.Quantity),
+            cart.BundleItems.Select(i => new CartBundleItemResponse(
+                i.Id,
+                i.BundleId,
+                i.Bundle.Name,
+                i.Bundle.Slug,
+                i.Bundle.ImageUrl,
+                i.Bundle.BundlePrice,
+                i.Quantity
+            )).ToList()
         );
 }

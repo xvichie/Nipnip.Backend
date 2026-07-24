@@ -156,5 +156,6 @@ public class OrderService(AppDbContext db, StoreService storeService)
         db.Orders
             .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product).ThenInclude(p => p.Images)
             .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.OptionValues).ThenInclude(ov => ov.OptionValue).ThenInclude(pov => pov.ProductOption)
+            .Include(o => o.BundleItems).ThenInclude(i => i.Bundle)
             .Include(o => o.Notes);
 }

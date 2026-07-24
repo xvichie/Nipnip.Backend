@@ -26,10 +26,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProductVariantOptionValue> ProductVariantOptionValues => Set<ProductVariantOptionValue>();
     public DbSet<ProductRelation> ProductRelations => Set<ProductRelation>();
     public DbSet<ProductCollection> ProductCollections => Set<ProductCollection>();
+    public DbSet<ProductBundle> ProductBundles => Set<ProductBundle>();
+    public DbSet<ProductBundleItem> ProductBundleItems => Set<ProductBundleItem>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
+    public DbSet<CartBundleItem> CartBundleItems => Set<CartBundleItem>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OrderBundleItem> OrderBundleItems => Set<OrderBundleItem>();
     public DbSet<OrderNote> OrderNotes => Set<OrderNote>();
     public DbSet<StoreDiscountCode> StoreDiscountCodes => Set<StoreDiscountCode>();
     public DbSet<StorePage> StorePages => Set<StorePage>();

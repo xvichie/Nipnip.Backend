@@ -11,7 +11,8 @@ public record CheckoutRequest(
     string? ShippingZoneId,
     string? Ref,
     string? CustomerNote = null,
-    string? DiscountCode = null
+    string? DiscountCode = null,
+    bool IsPickup = false
 );
 
 public record OrderResponse(
@@ -31,5 +32,6 @@ public record OrderResponse(
     string? RedirectUrl = null,
     string? CustomerNote = null,
     string? DiscountCode = null,
-    decimal DiscountAmount = 0m
+    decimal DiscountAmount = 0m,
+    bool IsPickup = false
 );

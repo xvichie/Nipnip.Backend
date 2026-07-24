@@ -36,4 +36,22 @@ public class CartController(CartService cartService) : ControllerBase
     {
         return Ok(await cartService.RemoveItemAsync(slug, Request.Headers[SessionHeader], itemId));
     }
+
+    [HttpPost("bundles")]
+    public async Task<ActionResult<CartResponse>> AddBundle(string slug, [FromBody] AddBundleToCartRequest request)
+    {
+        return Ok(await cartService.AddBundleToCartAsync(slug, Request.Headers[SessionHeader], request));
+    }
+
+    [HttpPut("bundles/{itemId:guid}")]
+    public async Task<ActionResult<CartResponse>> UpdateBundle(string slug, Guid itemId, [FromBody] UpdateCartBundleItemRequest request)
+    {
+        return Ok(await cartService.UpdateBundleItemAsync(slug, Request.Headers[SessionHeader], itemId, request));
+    }
+
+    [HttpDelete("bundles/{itemId:guid}")]
+    public async Task<ActionResult<CartResponse>> RemoveBundle(string slug, Guid itemId)
+    {
+        return Ok(await cartService.RemoveBundleItemAsync(slug, Request.Headers[SessionHeader], itemId));
+    }
 }

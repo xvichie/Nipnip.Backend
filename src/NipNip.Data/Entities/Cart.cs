@@ -9,4 +9,5 @@ public class Cart
 
     public Store Store { get; set; } = null!;
     public ICollection<CartItem> Items { get; set; } = [];
+    public ICollection<CartBundleItem> BundleItems { get; set; } = [];
 }

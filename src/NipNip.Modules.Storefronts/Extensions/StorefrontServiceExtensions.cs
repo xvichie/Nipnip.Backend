@@ -57,6 +57,7 @@ public static class StorefrontServiceExtensions
         services.AddScoped<CategoryService>();
         services.AddScoped<CollectionService>();
         services.AddScoped<StoreDiscountCodeService>();
+        services.AddScoped<ProductBundleService>();
         services.AddScoped<StorePageService>();
         services.AddScoped<ContactMessageService>();
         services.AddScoped<ProductService>();

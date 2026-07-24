@@ -22,7 +22,8 @@ public static class OrderMappingExtensions
             order.CreatedAt,
             CustomerNote: order.CustomerNote,
             DiscountCode: order.DiscountCode,
-            DiscountAmount: order.DiscountAmount
+            DiscountAmount: order.DiscountAmount,
+            IsPickup: order.IsPickup
         );
 
     public static OrderDetailResponse ToDetailDto(this Order order) =>
@@ -54,6 +55,13 @@ public static class OrderMappingExtensions
                 i.Quantity,
                 i.PriceAtPurchase
             )).ToList(),
+            order.BundleItems.Select(i => new OrderBundleItemResponse(
+                i.Id,
+                i.BundleId,
+                i.Bundle.Name,
+                i.Quantity,
+                i.PriceAtPurchase
+            )).ToList(),
             order.Notes
                 .OrderBy(n => n.CreatedAt)
                 .Select(n => new OrderNoteResponse(n.Id, n.Content, n.CreatedAt))
@@ -64,6 +72,7 @@ public static class OrderMappingExtensions
             order.QuickShipperDeliveryFee,
             order.CustomerNote,
             order.DiscountCode,
-            order.DiscountAmount
+            order.DiscountAmount,
+            order.IsPickup
         );
 }

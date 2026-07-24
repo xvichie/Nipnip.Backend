@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NipNip.Modules.Storefronts.DTOs;
 using NipNip.Shared.Extensions;
@@ -66,6 +67,23 @@ public class ProductController(ProductService productService) : ControllerBase
     {
         var clerkUserId = User.GetClerkUserId();
         return Ok(await productService.GetAllForOwnStoreAsync(clerkUserId, pagination, search, categoryId, collectionId, isActive, sortBy, sortDir));
+    }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportCsv()
+    {
+        var clerkUserId = User.GetClerkUserId();
+        var csv = await productService.ExportCsvAsync(clerkUserId);
+        return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "products.csv");
+    }
+
+    [HttpPost("import")]
+    public async Task<ActionResult<ProductImportResult>> ImportCsv(IFormFile file)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        using var reader = new StreamReader(file.OpenReadStream());
+        var content = await reader.ReadToEndAsync();
+        return Ok(await productService.ImportCsvAsync(clerkUserId, content));
     }
 
     [HttpGet("{id:guid}")]

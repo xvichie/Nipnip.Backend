@@ -173,6 +173,68 @@ public class CartService(
         return cart.ToDto();
     }
 
+    public async Task<CartResponse> AddBundleToCartAsync(string slug, string? sessionId, AddBundleToCartRequest request)
+    {
+        if (request.Quantity <= 0)
+            throw new ArgumentException("Quantity must be greater than zero.");
+
+        var cart = await GetOrCreateCartAsync(slug, sessionId);
+
+        var bundle = await db.ProductBundles.FirstOrDefaultAsync(b => b.Id == request.BundleId && b.StoreId == cart.StoreId && b.IsActive)
+            ?? throw new NotFoundException("Bundle not found.");
+
+        var existingItem = cart.BundleItems.FirstOrDefault(i => i.BundleId == bundle.Id);
+        if (existingItem is not null)
+        {
+            existingItem.Quantity += request.Quantity;
+        }
+        else
+        {
+            var newItem = new CartBundleItem
+            {
+                Id = Guid.NewGuid(),
+                CartId = cart.Id,
+                BundleId = bundle.Id,
+                Bundle = bundle,
+                Quantity = request.Quantity,
+            };
+            db.CartBundleItems.Add(newItem);
+        }
+
+        await db.SaveChangesAsync();
+        return cart.ToDto();
+    }
+
+    public async Task<CartResponse> UpdateBundleItemAsync(string slug, string? sessionId, Guid itemId, UpdateCartBundleItemRequest request)
+    {
+        if (request.Quantity <= 0)
+            throw new ArgumentException("Quantity must be greater than zero.");
+
+        var cart = await GetOrCreateCartAsync(slug, sessionId);
+
+        var item = cart.BundleItems.FirstOrDefault(i => i.Id == itemId)
+            ?? throw new NotFoundException("Cart bundle item not found.");
+
+        item.Quantity = request.Quantity;
+        await db.SaveChangesAsync();
+
+        return cart.ToDto();
+    }
+
+    public async Task<CartResponse> RemoveBundleItemAsync(string slug, string? sessionId, Guid itemId)
+    {
+        var cart = await GetOrCreateCartAsync(slug, sessionId);
+
+        var item = cart.BundleItems.FirstOrDefault(i => i.Id == itemId)
+            ?? throw new NotFoundException("Cart bundle item not found.");
+
+        cart.BundleItems.Remove(item);
+        db.CartBundleItems.Remove(item);
+        await db.SaveChangesAsync();
+
+        return cart.ToDto();
+    }
+
     public async Task<OrderResponse> CheckoutAsync(string slug, string? sessionId, CheckoutRequest request, OrderSource source = OrderSource.Storefront)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerName))
@@ -194,7 +256,7 @@ public class CartService(
 
         var cart = await GetOrCreateCartAsync(slug, sessionId);
 
-        if (cart.Items.Count == 0)
+        if (cart.Items.Count == 0 && cart.BundleItems.Count == 0)
             throw new ArgumentException("Cart is empty.");
 
         var store = await db.Stores.AsNoTracking().FirstOrDefaultAsync(s => s.Id == cart.StoreId);
@@ -214,6 +276,7 @@ public class CartService(
             Longitude = request.Longitude,
             CustomerNote = string.IsNullOrWhiteSpace(request.CustomerNote) ? null : request.CustomerNote.Trim(),
             PaymentMethod = paymentMethod,
+            IsPickup = request.IsPickup,
             Status = OrderStatus.Pending,
             Source = source,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -228,9 +291,23 @@ public class CartService(
             PriceAtPurchase = i.Variant.SalePrice ?? i.Variant.Price,
         }).ToList();
 
-        var subtotal = orderItems.Sum(i => i.PriceAtPurchase * i.Quantity);
+        var orderBundleItems = cart.BundleItems.Select(i => new OrderBundleItem
+        {
+            Id = Guid.NewGuid(),
+            OrderId = order.Id,
+            BundleId = i.BundleId,
+            Quantity = i.Quantity,
+            PriceAtPurchase = i.Bundle.BundlePrice,
+        }).ToList();
 
-        var (shippingFee, shippingZoneName) = store is not null
+        var subtotal = orderItems.Sum(i => i.PriceAtPurchase * i.Quantity)
+            + orderBundleItems.Sum(i => i.PriceAtPurchase * i.Quantity);
+
+        var minOrderAmount = store is not null ? ExtractMinOrderAmount(store.ThemeConfig) : null;
+        if (minOrderAmount is { } min && subtotal < min)
+            throw new ArgumentException($"Minimum order amount is {min:F2}.");
+
+        var (shippingFee, shippingZoneName) = store is not null && !request.IsPickup
             ? ExtractShipping(store.ThemeConfig, request.ShippingZoneId, subtotal)
             : (0m, null);
 
@@ -247,17 +324,25 @@ public class CartService(
             i.Variant.Product.Name,
             i.Quantity,
             i.Variant.SalePrice ?? i.Variant.Price
-        )).ToList();
+        )).Concat(cart.BundleItems.Select(i => new OrderConfirmationEmailItem(
+            i.Bundle.Name,
+            i.Quantity,
+            i.Bundle.BundlePrice
+        ))).ToList();
 
         db.Orders.Add(order);
         db.OrderItems.AddRange(orderItems);
+        db.OrderBundleItems.AddRange(orderBundleItems);
 
         // Flitt/TBC/BOG/CityPay orders aren't "placed" yet — the customer still has to complete
         // a hosted payment. The cart, confirmation email, and affiliate conversion all wait
         // until the callback confirms payment (each gateway's own FinalizeApprovedOrderAsync),
         // so an abandoned/declined payment doesn't lose the customer's cart or fire a false conversion.
         if (!isHostedCheckout)
+        {
             db.CartItems.RemoveRange(cart.Items);
+            db.CartBundleItems.RemoveRange(cart.BundleItems);
+        }
 
         await db.SaveChangesAsync();
 
@@ -355,6 +440,21 @@ public class CartService(
         return null;
     }
 
+    private static decimal? ExtractMinOrderAmount(string themeConfigJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(themeConfigJson);
+            return doc.RootElement.TryGetProperty("minOrderAmount", out var prop) && prop.ValueKind == JsonValueKind.Number
+                ? prop.GetDecimal()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static (decimal Fee, string? ZoneName) ExtractShipping(string themeConfigJson, string? shippingZoneId, decimal subtotal)
     {
         try
@@ -407,6 +507,7 @@ public class CartService(
             cart = await db.Carts
                 .Include(c => c.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product).ThenInclude(p => p.Images)
                 .Include(c => c.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.OptionValues).ThenInclude(ov => ov.OptionValue).ThenInclude(pov => pov.ProductOption)
+                .Include(c => c.BundleItems).ThenInclude(i => i.Bundle)
                 .FirstOrDefaultAsync(c => c.StoreId == store.Id && c.SessionId == sessionId);
         }
 
