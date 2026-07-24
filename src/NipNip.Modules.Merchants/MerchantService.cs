@@ -98,7 +98,13 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         var result = await db.Merchants
             .OrderByDescending(m => m.CreatedAt)
             .ToPaginatedResultAsync(page, pageSize);
-        return result.Map(m => m.ToDto());
+
+        var merchantIds = result.Items.Select(m => m.Id).ToList();
+        var storeCreatedAtByMerchant = await db.Stores
+            .Where(s => merchantIds.Contains(s.MerchantId))
+            .ToDictionaryAsync(s => s.MerchantId, s => (DateTimeOffset?)s.CreatedAt);
+
+        return result.Map(m => m.ToDto(storeCreatedAt: storeCreatedAtByMerchant.GetValueOrDefault(m.Id)));
     }
 
     public async Task<MerchantResponse> UpdateAdminAsync(Guid id, UpdateMerchantRequest request)

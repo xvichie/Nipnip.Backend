@@ -18,7 +18,9 @@ public record MerchantResponse(
     bool IsPublic,
     bool IsProspect,
     bool IsApprovedForViewer,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    /// <summary>When their Store was created — null if they haven't set one up yet. Only populated by the admin listing.</summary>
+    DateTimeOffset? StoreCreatedAt = null
 );
 
 public record MerchantAccessRequestResponse(
