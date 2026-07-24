@@ -20,6 +20,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
         PaginatedRequest pagination,
         string? search = null,
         Guid? categoryId = null,
+        Guid? collectionId = null,
         bool? isActive = null,
         string? sortBy = null,
         string? sortDir = null)
@@ -28,6 +29,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
         var query = db.Products
             .Include(p => p.Images)
+            .Include(p => p.ProductCollections)
             .Where(p => p.StoreId == store.Id);
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -35,6 +37,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
         if (categoryId.HasValue)
             query = query.Where(p => p.CategoryId == categoryId.Value);
+
+        if (collectionId.HasValue)
+            query = query.Where(p => p.ProductCollections.Any(pc => pc.CollectionId == collectionId.Value));
 
         if (isActive.HasValue)
             query = query.Where(p => p.IsActive == isActive.Value);
@@ -56,6 +61,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
         string slug,
         PaginatedRequest pagination,
         string? categorySlug = null,
+        string? collectionSlug = null,
         string? search = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
@@ -68,6 +74,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
         var query = db.Products
             .Include(p => p.Images)
+            .Include(p => p.ProductCollections)
             .Where(p => p.StoreId == store.Id && p.IsActive);
 
         if (!string.IsNullOrWhiteSpace(categorySlug))
@@ -85,6 +92,17 @@ public class ProductService(AppDbContext db, StoreService storeService)
             {
                 return new PaginatedResult<ProductSummaryResponse>([], 0, pagination.Page, pagination.PageSize, 0);
             }
+        }
+
+        Guid? matchedCollectionId = null;
+        if (!string.IsNullOrWhiteSpace(collectionSlug))
+        {
+            var collection = await db.Collections.FirstOrDefaultAsync(c => c.StoreId == store.Id && c.Slug == collectionSlug);
+            if (collection is null)
+                return new PaginatedResult<ProductSummaryResponse>([], 0, pagination.Page, pagination.PageSize, 0);
+
+            matchedCollectionId = collection.Id;
+            query = query.Where(p => p.ProductCollections.Any(pc => pc.CollectionId == collection.Id));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -115,6 +133,10 @@ public class ProductService(AppDbContext db, StoreService storeService)
             "price" => descending
                 ? query.OrderByDescending(p => p.SalePrice ?? p.BasePrice)
                 : query.OrderBy(p => p.SalePrice ?? p.BasePrice),
+            // No explicit sort requested while filtering by a single collection: show the
+            // merchant's own curated order for that collection instead of newest-first.
+            null when matchedCollectionId.HasValue =>
+                query.OrderBy(p => p.ProductCollections.First(pc => pc.CollectionId == matchedCollectionId.Value).SortOrder),
             _ => descending ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt),
         };
 
@@ -213,6 +235,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
             .Include(p => p.Images)
             .Include(p => p.Options).ThenInclude(o => o.Values)
             .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
+            .Include(p => p.ProductCollections)
             .FirstOrDefaultAsync(p => p.Slug == productSlug && p.StoreId == store.Id && p.IsActive)
             ?? throw new NotFoundException("Product not found.");
 
@@ -237,6 +260,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
         {
             var manualProducts = await db.Products
                 .Include(p => p.Images)
+                .Include(p => p.ProductCollections)
                 .Where(p => manualOrder.Contains(p.Id) && p.IsActive)
                 .ToDictionaryAsync(p => p.Id);
 
@@ -252,6 +276,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
         var fallbackQuery = db.Products
             .Include(p => p.Images)
+            .Include(p => p.ProductCollections)
             .Where(p => p.StoreId == product.StoreId && p.Id != product.Id && p.IsActive);
 
         if (product.CategoryId.HasValue)
@@ -309,6 +334,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
         db.Products.Add(product);
         await db.SaveChangesAsync();
 
+        if (request.CollectionIds is not null)
+            await SyncProductCollectionsAsync(store.Id, product.Id, request.CollectionIds);
+
         return (await GetOwnProductAsync(clerkUserId, product.Id)).ToDetailDto();
     }
 
@@ -352,7 +380,53 @@ public class ProductService(AppDbContext db, StoreService storeService)
         if (request.IsActive.HasValue) product.IsActive = request.IsActive.Value;
 
         await db.SaveChangesAsync();
+
+        if (request.CollectionIds is not null)
+        {
+            await SyncProductCollectionsAsync(product.StoreId, product.Id, request.CollectionIds);
+            product = await GetOwnProductAsync(clerkUserId, id);
+        }
+
         return product.ToDetailDto();
+    }
+
+    // Full replace of a product's collection memberships from the product-edit side (as opposed
+    // to CollectionService.SetProductsAsync, which replaces a single collection's whole product
+    // list from the collection side) — new memberships are appended to the end of each target
+    // collection's existing order; memberships this product already had are left untouched.
+    private async Task SyncProductCollectionsAsync(Guid storeId, Guid productId, List<Guid> collectionIds)
+    {
+        var distinctIds = collectionIds.Distinct().ToList();
+
+        if (distinctIds.Count > 0)
+        {
+            var validCount = await db.Collections.CountAsync(c => distinctIds.Contains(c.Id) && c.StoreId == storeId);
+            if (validCount != distinctIds.Count)
+                throw new NotFoundException("One or more selected collections were not found in your store.");
+        }
+
+        var existing = await db.ProductCollections.Where(pc => pc.ProductId == productId).ToListAsync();
+        var existingIds = existing.Select(pc => pc.CollectionId).ToHashSet();
+
+        db.ProductCollections.RemoveRange(existing.Where(pc => !distinctIds.Contains(pc.CollectionId)));
+
+        foreach (var collectionId in distinctIds.Where(cid => !existingIds.Contains(cid)))
+        {
+            var maxSortOrder = await db.ProductCollections
+                .Where(pc => pc.CollectionId == collectionId)
+                .Select(pc => (int?)pc.SortOrder)
+                .MaxAsync() ?? -1;
+
+            db.ProductCollections.Add(new ProductCollection
+            {
+                Id = Guid.NewGuid(),
+                ProductId = productId,
+                CollectionId = collectionId,
+                SortOrder = maxSortOrder + 1,
+            });
+        }
+
+        await db.SaveChangesAsync();
     }
 
     // --- Admin-scoped (building out a prospect's demo store, or support on a real merchant's
@@ -605,6 +679,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
             .Include(p => p.Images)
             .Include(p => p.Options).ThenInclude(o => o.Values)
             .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
+            .Include(p => p.ProductCollections)
             .FirstOrDefaultAsync(p => p.Id == productId && p.StoreId == store.Id)
             ?? throw new NotFoundException("Product not found.");
     }
@@ -619,6 +694,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
             .Include(p => p.Images)
             .Include(p => p.Options).ThenInclude(o => o.Values)
             .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
+            .Include(p => p.ProductCollections)
             .FirstOrDefaultAsync(p => p.Id == productId && p.StoreId == store.Id)
             ?? throw new NotFoundException("Product not found.");
     }

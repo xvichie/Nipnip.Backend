@@ -211,6 +211,7 @@ public class CartService(
             Address = request.Address.Trim(),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
+            CustomerNote = string.IsNullOrWhiteSpace(request.CustomerNote) ? null : request.CustomerNote.Trim(),
             PaymentMethod = paymentMethod,
             Status = OrderStatus.Pending,
             Source = source,

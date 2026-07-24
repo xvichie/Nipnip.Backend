@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<Store> Stores => Set<Store>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Collection> Collections => Set<Collection>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductOption> ProductOptions => Set<ProductOption>();
@@ -24,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<ProductVariantOptionValue> ProductVariantOptionValues => Set<ProductVariantOptionValue>();
     public DbSet<ProductRelation> ProductRelations => Set<ProductRelation>();
+    public DbSet<ProductCollection> ProductCollections => Set<ProductCollection>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Order> Orders => Set<Order>();

@@ -9,7 +9,8 @@ public record CheckoutRequest(
     double? Longitude,
     string PaymentMethod,
     string? ShippingZoneId,
-    string? Ref
+    string? Ref,
+    string? CustomerNote = null
 );
 
 public record OrderResponse(
@@ -26,5 +27,6 @@ public record OrderResponse(
     decimal ShippingFee,
     string? ShippingZoneName,
     DateTimeOffset CreatedAt,
-    string? RedirectUrl = null
+    string? RedirectUrl = null,
+    string? CustomerNote = null
 );

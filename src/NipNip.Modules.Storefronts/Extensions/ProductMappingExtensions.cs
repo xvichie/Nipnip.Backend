@@ -19,7 +19,8 @@ public static class ProductMappingExtensions
             product.IsActive,
             orderedImageUrls.FirstOrDefault(),
             orderedImageUrls.Skip(1).FirstOrDefault(),
-            product.CreatedAt
+            product.CreatedAt,
+            product.ProductCollections.Select(pc => pc.CollectionId).ToList()
         );
     }
 
@@ -40,6 +41,7 @@ public static class ProductMappingExtensions
             product.Images.OrderBy(i => i.SortOrder).Select(i => i.ToDto()).ToList(),
             product.Options.Select(o => o.ToDto()).ToList(),
             product.Variants.Select(v => v.ToDto()).ToList(),
-            relatedProducts ?? []
+            relatedProducts ?? [],
+            product.ProductCollections.Select(pc => pc.CollectionId).ToList()
         );
 }

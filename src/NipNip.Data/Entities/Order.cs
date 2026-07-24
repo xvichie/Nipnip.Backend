@@ -12,6 +12,9 @@ public class Order
     public string Address { get; set; } = "";
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    // Optional note the buyer leaves at checkout (e.g. gate code, delivery instructions) —
+    // distinct from OrderNote below, which is the merchant's own internal notes on the order.
+    public string? CustomerNote { get; set; }
     public PaymentMethod PaymentMethod { get; set; }
     public OrderStatus Status { get; set; }
     public decimal Total { get; set; }

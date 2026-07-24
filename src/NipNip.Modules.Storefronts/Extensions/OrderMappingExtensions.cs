@@ -19,7 +19,8 @@ public static class OrderMappingExtensions
             order.Total,
             order.ShippingFee,
             order.ShippingZoneName,
-            order.CreatedAt
+            order.CreatedAt,
+            CustomerNote: order.CustomerNote
         );
 
     public static OrderDetailResponse ToDetailDto(this Order order) =>
@@ -58,6 +59,7 @@ public static class OrderMappingExtensions
             order.QuickShipperOrderId,
             order.QuickShipperStatus,
             order.QuickShipperTrackingUrl,
-            order.QuickShipperDeliveryFee
+            order.QuickShipperDeliveryFee,
+            order.CustomerNote
         );
 }

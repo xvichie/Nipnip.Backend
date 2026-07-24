@@ -34,7 +34,8 @@ public record OrderDetailResponse(
     int? QuickShipperOrderId,
     string? QuickShipperStatus,
     string? QuickShipperTrackingUrl,
-    decimal? QuickShipperDeliveryFee
+    decimal? QuickShipperDeliveryFee,
+    string? CustomerNote
 );
 
 public record UpdateOrderStatusRequest(string Status);

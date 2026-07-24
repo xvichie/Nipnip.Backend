@@ -10,7 +10,8 @@ public record ProductSummaryResponse(
     bool IsActive,
     string? ThumbnailUrl,
     string? SecondImageUrl,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    List<Guid> CollectionIds
 );
 
 public record ProductDetailResponse(
@@ -26,17 +27,21 @@ public record ProductDetailResponse(
     List<ProductImageResponse> Images,
     List<ProductOptionResponse> Options,
     List<ProductVariantResponse> Variants,
-    List<ProductSummaryResponse> RelatedProducts
+    List<ProductSummaryResponse> RelatedProducts,
+    List<Guid> CollectionIds
 );
 
-public record CreateProductRequest(string Name, string? Description, string? VideoUrl, decimal BasePrice, decimal? SalePrice, Guid? CategoryId);
+/// <summary>CollectionIds: new memberships are appended to the end of each target collection's order.</summary>
+public record CreateProductRequest(string Name, string? Description, string? VideoUrl, decimal BasePrice, decimal? SalePrice, Guid? CategoryId, List<Guid>? CollectionIds = null);
 
 /// <summary>
 /// VideoUrl: send "" to clear an existing video back to none, a URL to set/replace it,
 /// or omit the field to leave it untouched (empty string and omission are distinguishable
 /// once deserialized — null is not, since a nullable string omits and nulls identically).
+/// CollectionIds: omit to leave membership unchanged; pass a list (possibly empty) to replace
+/// it outright — new memberships are appended to the end of each target collection's order.
 /// </summary>
-public record UpdateProductRequest(string? Name, string? Description, string? VideoUrl, decimal? BasePrice, decimal? SalePrice, Guid? CategoryId, bool? IsActive);
+public record UpdateProductRequest(string? Name, string? Description, string? VideoUrl, decimal? BasePrice, decimal? SalePrice, Guid? CategoryId, bool? IsActive, List<Guid>? CollectionIds = null);
 
 public record ProductPriceRangeResponse(decimal Min, decimal Max);
 

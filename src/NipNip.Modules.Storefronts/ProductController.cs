@@ -19,6 +19,7 @@ public class ProductController(ProductService productService) : ControllerBase
         string slug,
         [FromQuery] PaginatedRequest pagination,
         [FromQuery] string? categorySlug,
+        [FromQuery] string? collectionSlug,
         [FromQuery] string? search,
         [FromQuery] decimal? minPrice,
         [FromQuery] decimal? maxPrice,
@@ -26,7 +27,7 @@ public class ProductController(ProductService productService) : ControllerBase
         [FromQuery] string? sortDir,
         [FromQuery] string? optionFilters)
     {
-        return Ok(await productService.GetAllForStoreSlugAsync(slug, pagination, categorySlug, search, minPrice, maxPrice, sortBy, sortDir, optionFilters));
+        return Ok(await productService.GetAllForStoreSlugAsync(slug, pagination, categorySlug, collectionSlug, search, minPrice, maxPrice, sortBy, sortDir, optionFilters));
     }
 
     [HttpGet("/api/stores/{slug}/products/price-range")]
@@ -58,12 +59,13 @@ public class ProductController(ProductService productService) : ControllerBase
         [FromQuery] PaginatedRequest pagination,
         [FromQuery] string? search = null,
         [FromQuery] Guid? categoryId = null,
+        [FromQuery] Guid? collectionId = null,
         [FromQuery] bool? isActive = null,
         [FromQuery] string? sortBy = null,
         [FromQuery] string? sortDir = null)
     {
         var clerkUserId = User.GetClerkUserId();
-        return Ok(await productService.GetAllForOwnStoreAsync(clerkUserId, pagination, search, categoryId, isActive, sortBy, sortDir));
+        return Ok(await productService.GetAllForOwnStoreAsync(clerkUserId, pagination, search, categoryId, collectionId, isActive, sortBy, sortDir));
     }
 
     [HttpGet("{id:guid}")]

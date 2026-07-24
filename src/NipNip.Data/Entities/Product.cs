@@ -19,4 +19,5 @@ public class Product
     public ICollection<ProductImage> Images { get; set; } = [];
     public ICollection<ProductOption> Options { get; set; } = [];
     public ICollection<ProductVariant> Variants { get; set; } = [];
+    public ICollection<ProductCollection> ProductCollections { get; set; } = [];
 }
