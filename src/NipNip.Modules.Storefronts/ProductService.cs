@@ -764,18 +764,32 @@ public class ProductService(AppDbContext db, StoreService storeService)
                 salePrice = sp;
             }
 
+            // An explicitly blank cell clears the category on update (categoryShouldClear); a
+            // name that just doesn't match anything is far more likely a typo than intent to
+            // remove the category, so that case only warns and leaves the existing value alone —
+            // it shouldn't silently destroy data. A missing column entirely is left untouched.
             Guid? categoryId = null;
+            var categoryShouldClear = false;
             var categoryName = Get(categoryIdx);
-            if (categoryIdx != -1 && !string.IsNullOrWhiteSpace(categoryName))
+            if (categoryIdx != -1)
             {
-                var match = categories.FirstOrDefault(c => string.Equals(c.Name, categoryName, StringComparison.OrdinalIgnoreCase));
-                if (match is null)
-                    results.Add(new ProductImportRowResult(rowNumber, name, "warning", $"Category '{categoryName}' not found — left uncategorized."));
+                if (string.IsNullOrWhiteSpace(categoryName))
+                {
+                    categoryShouldClear = true;
+                }
                 else
-                    categoryId = match.Id;
+                {
+                    var match = categories.FirstOrDefault(c => string.Equals(c.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                        results.Add(new ProductImportRowResult(rowNumber, name, "warning", $"Category '{categoryName}' not found — left unchanged."));
+                    else
+                        categoryId = match.Id;
+                }
             }
 
-            var description = descriptionIdx != -1 ? Get(descriptionIdx) : "";
+            // null = column absent from this CSV (leave existing value untouched on update);
+            // "" = column present but the cell is blank (clear the existing value on update).
+            var description = descriptionIdx != -1 ? Get(descriptionIdx) : null;
             var isActive = isActiveIdx == -1 || !bool.TryParse(Get(isActiveIdx), out var parsedActive) || parsedActive;
 
             var slug = Get(slugIdx);
@@ -788,8 +802,8 @@ public class ProductService(AppDbContext db, StoreService storeService)
                 existing.Name = name;
                 existing.BasePrice = basePrice;
                 existing.SalePrice = salePrice;
-                if (categoryId.HasValue) existing.CategoryId = categoryId;
-                if (!string.IsNullOrWhiteSpace(description)) existing.Description = description;
+                if (categoryId.HasValue || categoryShouldClear) existing.CategoryId = categoryId;
+                if (description is not null) existing.Description = string.IsNullOrWhiteSpace(description) ? null : description;
                 existing.IsActive = isActive;
                 updated++;
                 results.Add(new ProductImportRowResult(rowNumber, name, "updated", null));

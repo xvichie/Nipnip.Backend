@@ -21,6 +21,7 @@ public class BogService(
     AesStringProtector protector,
     IEmailService emailService,
     TrackingService trackingService,
+    StoreDiscountCodeService discountCodeService,
     IOptions<BogOptions> options,
     ILogger<BogService> logger)
 {
@@ -154,6 +155,7 @@ public class BogService(
         var order = await db.Orders
             .Include(o => o.Store)
             .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product)
+            .Include(o => o.BundleItems).ThenInclude(i => i.Bundle)
             .FirstOrDefaultAsync(o => o.BogPreOrderId == preOrderId);
         if (order is null)
         {
@@ -209,13 +211,20 @@ public class BogService(
 
         if (merchantData.SessionId is not null)
         {
-            var cart = await db.Carts.Include(c => c.Items)
+            var cart = await db.Carts.Include(c => c.Items).Include(c => c.BundleItems)
                 .FirstOrDefaultAsync(c => c.StoreId == store.Id && c.SessionId == merchantData.SessionId);
-            if (cart is not null && cart.Items.Count > 0)
+            if (cart is not null && (cart.Items.Count > 0 || cart.BundleItems.Count > 0))
             {
                 db.CartItems.RemoveRange(cart.Items);
+                db.CartBundleItems.RemoveRange(cart.BundleItems);
                 await db.SaveChangesAsync();
             }
+        }
+
+        if (order.DiscountCode is not null)
+        {
+            if (!await discountCodeService.ConfirmUsageAsync(store.Id, order.DiscountCode))
+                logger.LogWarning("Discount code {Code} could not be confirmed for BOG order {OrderId} — it likely hit its usage limit concurrently.", order.DiscountCode, order.Id);
         }
 
         if (store.AffiliateEnabled)
@@ -235,6 +244,7 @@ public class BogService(
         {
             var emailItems = order.Items
                 .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.Name, i.Quantity, i.PriceAtPurchase))
+                .Concat(order.BundleItems.Select(i => new OrderConfirmationEmailItem(i.Bundle.Name, i.Quantity, i.PriceAtPurchase)))
                 .ToList();
 
             await emailService.SendOrderConfirmationAsync(new OrderConfirmationEmailData(

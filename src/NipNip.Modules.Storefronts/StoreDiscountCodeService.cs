@@ -102,26 +102,53 @@ public class StoreDiscountCodeService(AppDbContext db, StoreService storeService
     }
 
     /// <summary>
-    /// Re-validates and applies the code at the moment of checkout — never trusts the amount
-    /// a client may have echoed back from an earlier /validate call — and increments UsesCount
-    /// on the tracked entity so it's persisted by the caller's own SaveChangesAsync alongside
-    /// the new Order (single transaction, no separate round-trip).
+    /// Re-validates and computes the discount at the moment of checkout — never trusts the
+    /// amount a client may have echoed back from an earlier /validate call. Deliberately does
+    /// NOT increment UsesCount: for hosted payment methods (Flitt/Tbc/Bog/CityPay) the order
+    /// isn't actually placed yet at this point, so consuming a use here would let someone burn
+    /// through a limited-run code just by abandoning the hosted payment page. Call
+    /// ConfirmUsageAsync separately once the order is genuinely confirmed.
     /// </summary>
-    public async Task<(decimal Amount, string? Code)> ApplyForCheckoutAsync(Guid storeId, string? code, decimal subtotal)
+    public async Task<(decimal Amount, string? Code)> PreviewForCheckoutAsync(Guid storeId, string? code, decimal subtotal)
     {
         if (string.IsNullOrWhiteSpace(code))
             return (0m, null);
 
         var normalizedCode = code.Trim().ToUpperInvariant();
-        var entity = await db.StoreDiscountCodes.FirstOrDefaultAsync(c => c.StoreId == storeId && c.Code == normalizedCode);
+        var entity = await db.StoreDiscountCodes.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.StoreId == storeId && c.Code == normalizedCode);
 
         if (Evaluate(entity, subtotal) is { } errorCode)
             throw new ArgumentException($"Discount code is not valid: {errorCode}.");
 
-        var amount = ComputeDiscountAmount(entity!, subtotal);
-        entity!.UsesCount += 1;
+        return (ComputeDiscountAmount(entity!, subtotal), entity!.Code);
+    }
 
-        return (amount, entity.Code);
+    /// <summary>
+    /// Atomically increments UsesCount only if the code is still active/unexpired/under its
+    /// limit at this exact moment — a single conditional UPDATE, so two concurrent confirmations
+    /// racing for the last remaining use of a limited-run code can't both succeed. Never throws:
+    /// for hosted payment methods this runs after the customer has already paid, so a code that
+    /// became invalid in the gap between preview and confirmation shouldn't unwind a paid order —
+    /// callers should log a false return rather than fail the checkout.
+    /// </summary>
+    public async Task<bool> ConfirmUsageAsync(Guid storeId, string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return true;
+
+        var normalizedCode = code.Trim().ToUpperInvariant();
+        var now = DateTimeOffset.UtcNow;
+
+        var rows = await db.StoreDiscountCodes
+            .Where(c => c.StoreId == storeId
+                && c.Code == normalizedCode
+                && c.IsActive
+                && (c.ExpiresAt == null || c.ExpiresAt >= now)
+                && (c.MaxUses == null || c.UsesCount < c.MaxUses.Value))
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsesCount, c => c.UsesCount + 1));
+
+        return rows > 0;
     }
 
     private static (DiscountCodeType Type, string NormalizedCode) ValidateFields(string code, string type, decimal value)

@@ -180,13 +180,19 @@ public class CartService(
 
         var cart = await GetOrCreateCartAsync(slug, sessionId);
 
-        var bundle = await db.ProductBundles.FirstOrDefaultAsync(b => b.Id == request.BundleId && b.StoreId == cart.StoreId && b.IsActive)
+        var bundle = await db.ProductBundles
+            .Include(b => b.Items).ThenInclude(i => i.Product).ThenInclude(p => p.Variants)
+            .FirstOrDefaultAsync(b => b.Id == request.BundleId && b.StoreId == cart.StoreId && b.IsActive)
             ?? throw new NotFoundException("Bundle not found.");
 
         var existingItem = cart.BundleItems.FirstOrDefault(i => i.BundleId == bundle.Id);
+        var newBundleQuantity = (existingItem?.Quantity ?? 0) + request.Quantity;
+
+        EnsureBundleStockAvailable(bundle, newBundleQuantity);
+
         if (existingItem is not null)
         {
-            existingItem.Quantity += request.Quantity;
+            existingItem.Quantity = newBundleQuantity;
         }
         else
         {
@@ -203,6 +209,29 @@ public class CartService(
 
         await db.SaveChangesAsync();
         return cart.ToDto();
+    }
+
+    /// <summary>
+    /// Bundles don't collect option selections the way regular add-to-cart does, so there's no
+    /// single variant to check — this sums stock across all of a product's variants (treating any
+    /// variant with unlimited stock as making the whole product unlimited) as a best-effort floor,
+    /// mainly to catch the common case of a bundle component that's fully sold out.
+    /// </summary>
+    private static void EnsureBundleStockAvailable(ProductBundle bundle, int bundleQuantity)
+    {
+        foreach (var item in bundle.Items)
+        {
+            var variants = item.Product.Variants;
+            if (variants.Count == 0) continue; // no variants materialized yet — nothing sold against this product yet
+
+            if (variants.Any(v => v.Stock is null)) continue; // unlimited stock
+
+            var availableStock = variants.Sum(v => v.Stock ?? 0);
+            var requiredStock = item.Quantity * bundleQuantity;
+
+            if (availableStock < requiredStock)
+                throw new ArgumentException($"'{item.Product.Name}' doesn't have enough stock for this bundle quantity.");
+        }
     }
 
     public async Task<CartResponse> UpdateBundleItemAsync(string slug, string? sessionId, Guid itemId, UpdateCartBundleItemRequest request)
@@ -311,7 +340,7 @@ public class CartService(
             ? ExtractShipping(store.ThemeConfig, request.ShippingZoneId, subtotal)
             : (0m, null);
 
-        var (discountAmount, appliedDiscountCode) = await discountCodeService.ApplyForCheckoutAsync(
+        var (discountAmount, appliedDiscountCode) = await discountCodeService.PreviewForCheckoutAsync(
             cart.StoreId, request.DiscountCode, subtotal);
 
         order.ShippingFee = shippingFee;
@@ -335,9 +364,11 @@ public class CartService(
         db.OrderBundleItems.AddRange(orderBundleItems);
 
         // Flitt/TBC/BOG/CityPay orders aren't "placed" yet — the customer still has to complete
-        // a hosted payment. The cart, confirmation email, and affiliate conversion all wait
-        // until the callback confirms payment (each gateway's own FinalizeApprovedOrderAsync),
-        // so an abandoned/declined payment doesn't lose the customer's cart or fire a false conversion.
+        // a hosted payment. The cart, confirmation email, affiliate conversion, and discount-code
+        // usage all wait until the callback confirms payment (each gateway's own
+        // FinalizeApprovedOrderAsync), so an abandoned/declined payment doesn't lose the
+        // customer's cart, fire a false conversion, or burn a limited-run discount code for a
+        // sale that never happened.
         if (!isHostedCheckout)
         {
             db.CartItems.RemoveRange(cart.Items);
@@ -345,6 +376,12 @@ public class CartService(
         }
 
         await db.SaveChangesAsync();
+
+        if (!isHostedCheckout && appliedDiscountCode is not null)
+        {
+            if (!await discountCodeService.ConfirmUsageAsync(cart.StoreId, appliedDiscountCode))
+                logger.LogWarning("Discount code {Code} could not be confirmed for order {OrderId} — it likely hit its usage limit concurrently.", appliedDiscountCode, order.Id);
+        }
 
         if (paymentMethod == PaymentMethod.Flitt)
         {
