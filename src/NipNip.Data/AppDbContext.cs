@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LinkTree> LinkTrees => Set<LinkTree>();
     public DbSet<LinkTreeItem> LinkTreeItems => Set<LinkTreeItem>();
     public DbSet<MerchantAccessRequest> MerchantAccessRequests => Set<MerchantAccessRequest>();
+    public DbSet<WebsiteInquiry> WebsiteInquiries => Set<WebsiteInquiry>();
 
     public DbSet<Store> Stores => Set<Store>();
     public DbSet<Category> Categories => Set<Category>();

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NipNip.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NipNip.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724225731_AddWebsiteInquiries")]
+    partial class AddWebsiteInquiries
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1531,9 +1534,6 @@ namespace NipNip.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ClerkUserId")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1554,13 +1554,7 @@ namespace NipNip.Data.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("text");
 
-                    b.Property<string>("StoreName")
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("ClerkUserId")
-                        .IsUnique();
 
                     b.HasIndex("CreatedAt");
 

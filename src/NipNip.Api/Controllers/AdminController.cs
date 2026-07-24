@@ -31,6 +31,7 @@ public class AdminController(
     CategoryService categoryService,
     ProductImageService productImageService,
     FacebookImportService facebookImportService,
+    WebsiteInquiryService websiteInquiryService,
     AppDbContext db) : ControllerBase
 {
     // --- Stats ---
@@ -382,6 +383,27 @@ public class AdminController(
     {
         return Ok(await trackingService.GetAllConversionsAdminAsync(
             merchantId, creatorId, from, to, page, pageSize));
+    }
+
+    // --- Website inquiries ("I want a website" leads from the marketing site footer) ---
+
+    [HttpGet("website-inquiries")]
+    public async Task<ActionResult<PaginatedResult<WebsiteInquiryResponse>>> GetAllWebsiteInquiries(
+        [FromQuery] PaginatedRequest pagination)
+    {
+        return Ok(await websiteInquiryService.GetAllAdminAsync(pagination));
+    }
+
+    [HttpPost("website-inquiries/{id:guid}/read")]
+    public async Task<ActionResult<WebsiteInquiryResponse>> MarkWebsiteInquiryAsRead(Guid id)
+    {
+        return Ok(await websiteInquiryService.MarkAsReadAsync(id));
+    }
+
+    [HttpGet("website-inquiries/unread-count")]
+    public async Task<ActionResult<UnreadWebsiteInquiryCountResponse>> GetUnreadWebsiteInquiryCount()
+    {
+        return Ok(new UnreadWebsiteInquiryCountResponse(await websiteInquiryService.GetUnreadCountAdminAsync()));
     }
 
     // --- Payouts ---

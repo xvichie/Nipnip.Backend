@@ -8,6 +8,7 @@ public static class MerchantServiceExtensions
     {
         services.AddScoped<MerchantService>();
         services.AddScoped<FacebookImportService>();
+        services.AddScoped<WebsiteInquiryService>();
         return services;
     }
 }
