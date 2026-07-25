@@ -13,7 +13,7 @@ public class StoreService(AppDbContext db, VercelDomainService vercel)
 {
     private static readonly Regex SlugRegex = new(@"^[a-z0-9][a-z0-9-]*$", RegexOptions.Compiled);
     private static readonly Regex DomainRegex = new(@"^([a-z0-9](-?[a-z0-9])*\.)+[a-z]{2,}$", RegexOptions.Compiled);
-    private static readonly string[] KnownThemeIds = ["minimal", "bold", "classic", "luxury", "vibrant", "commerce", "editorial"];
+    private static readonly string[] KnownThemeIds = ["minimal", "bold", "classic", "luxury", "vibrant", "commerce", "editorial", "flower", "kids"];
 
     public async Task<StoreResponse> CreateAsync(string clerkUserId, CreateStoreRequest request)
     {
