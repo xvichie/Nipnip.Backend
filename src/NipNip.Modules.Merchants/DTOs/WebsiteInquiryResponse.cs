@@ -16,7 +16,9 @@ public record CreateWebsiteInquiryRequest(
     string? StoreName,
     string? Email,
     string? Phone,
-    string Message
+    // Optional — the onboarding-replacement flow (see app/onboarding/page.tsx) collects only
+    // name/contact/store name, no message. The marketing-site footer form still asks for one.
+    string? Message = null
 );
 
 public record UnreadWebsiteInquiryCountResponse(int Count);

@@ -22,9 +22,6 @@ public class WebsiteInquiryService(AppDbContext db)
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new ArgumentException("Name is required.");
 
-        if (string.IsNullOrWhiteSpace(request.Message))
-            throw new ArgumentException("Message is required.");
-
         if (string.IsNullOrWhiteSpace(request.Email) && string.IsNullOrWhiteSpace(request.Phone))
             throw new ArgumentException("Either email or phone number is required.");
 
@@ -44,7 +41,7 @@ public class WebsiteInquiryService(AppDbContext db)
             StoreName = string.IsNullOrWhiteSpace(request.StoreName) ? null : request.StoreName.Trim(),
             Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
             Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
-            Message = request.Message.Trim(),
+            Message = string.IsNullOrWhiteSpace(request.Message) ? "" : request.Message.Trim(),
             ClerkUserId = clerkUserId,
             IsRead = false,
             CreatedAt = DateTimeOffset.UtcNow,
