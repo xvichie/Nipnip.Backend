@@ -293,6 +293,9 @@ public class CartService(
         if (isHostedCheckout && store is null)
             throw new NotFoundException("Store not found.");
 
+        if (store is not null && !IsPaymentMethodEnabled(store.ThemeConfig, paymentMethod))
+            throw new ArgumentException("This payment method is not available for this store.");
+
         var order = new Order
         {
             Id = Guid.NewGuid(),
@@ -475,6 +478,40 @@ public class CartService(
         {
         }
         return null;
+    }
+
+    private static bool IsPaymentMethodEnabled(string themeConfigJson, PaymentMethod method)
+    {
+        var key = method switch
+        {
+            PaymentMethod.CashOnDelivery => "codEnabled",
+            PaymentMethod.BankTransfer => "bankTransferEnabled",
+            PaymentMethod.Flitt => "flittEnabled",
+            PaymentMethod.Tbc => "tbcEnabled",
+            PaymentMethod.Bog => "bogEnabled",
+            PaymentMethod.CityPay => "cityPayEnabled",
+            _ => null,
+        };
+        if (key is null) return false;
+
+        // Mirrors the frontend's DEFAULT_THEME_CONFIG: a store that has never touched its
+        // ThemeConfig ships with COD and bank transfer enabled and everything else off, since
+        // the backend stores "{}" for a brand-new store rather than the full default blob.
+        var defaultEnabled = method is PaymentMethod.CashOnDelivery or PaymentMethod.BankTransfer;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(themeConfigJson);
+            if (doc.RootElement.TryGetProperty(key, out var prop) &&
+                (prop.ValueKind == JsonValueKind.True || prop.ValueKind == JsonValueKind.False))
+            {
+                return prop.GetBoolean();
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        return defaultEnabled;
     }
 
     private static decimal? ExtractMinOrderAmount(string themeConfigJson)
