@@ -9,7 +9,7 @@ public static class ProductBundleMappingExtensions
     {
         var items = bundle.Items.Select(i => new BundleItemResponse(
             i.ProductId,
-            i.Product.Name,
+            i.Product.DisplayName(),
             i.Product.Slug,
             i.Product.Images.OrderBy(img => img.SortOrder).FirstOrDefault()?.Url,
             i.Product.SalePrice ?? i.Product.BasePrice,

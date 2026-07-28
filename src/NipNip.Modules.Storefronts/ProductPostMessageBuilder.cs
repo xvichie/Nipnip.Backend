@@ -1,4 +1,5 @@
 using NipNip.Data.Entities;
+using NipNip.Modules.Storefronts.Extensions;
 
 namespace NipNip.Modules.Storefronts;
 
@@ -14,8 +15,9 @@ internal static class ProductPostMessageBuilder
         var productUrl = $"https://{host}/products/{product.Slug}";
 
         var price = product.SalePrice ?? product.BasePrice;
-        var messageParts = new List<string> { product.Name };
-        if (!string.IsNullOrWhiteSpace(product.Description)) messageParts.Add(product.Description);
+        var messageParts = new List<string> { product.DisplayName() };
+        var description = product.DisplayDescription();
+        if (!string.IsNullOrWhiteSpace(description)) messageParts.Add(description);
         messageParts.Add($"{price} ₾");
         messageParts.Add(productUrl);
         return string.Join("\n\n", messageParts);

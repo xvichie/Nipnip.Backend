@@ -4,6 +4,7 @@ using NipNip.Data;
 using NipNip.Data.Entities;
 using NipNip.Data.Enums;
 using NipNip.Modules.Storefronts.DTOs;
+using NipNip.Modules.Storefronts.Extensions;
 
 namespace NipNip.Modules.Storefronts.AiAgent;
 
@@ -53,12 +54,18 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
         var query = db.Products.Where(p => p.StoreId == store.Id && p.IsActive);
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        {
+            var pattern = $"%{search}%";
+            query = query.Where(p =>
+                EF.Functions.ILike(p.NameKa!, pattern) ||
+                EF.Functions.ILike(p.NameEn!, pattern) ||
+                EF.Functions.ILike(p.NameRu!, pattern));
+        }
 
         var products = await query
             .OrderByDescending(p => p.CreatedAt)
             .Take(limit)
-            .Select(p => new { p.Name, p.Slug, p.BasePrice, p.SalePrice })
+            .Select(p => new { Name = p.NameKa ?? p.NameEn ?? p.NameRu ?? "", p.Slug, p.BasePrice, p.SalePrice })
             .ToListAsync();
 
         return products
@@ -80,14 +87,14 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
         if (product is null)
             return new ProductLookupResult(false, "Product not found.");
 
-        var options = product.Options.ToDictionary(o => o.Name, o => o.Values.Select(v => v.Value).ToList());
+        var options = product.Options.ToDictionary(o => o.DisplayName(), o => o.Values.Select(v => v.Value).ToList());
 
         // Only explicit variant overrides show up here (e.g. a size that's out of stock) —
         // combinations with no row here are implicitly available at the base/sale price
         // (smart-defaults model — see the system prompt's lookup_product bullet).
         var variants = product.Variants.Select(v => new ProductVariantInfo(
             v.OptionValues.Count > 0
-                ? string.Join(", ", v.OptionValues.Select(ov => $"{ov.OptionValue.ProductOption.Name}: {ov.OptionValue.Value}"))
+                ? string.Join(", ", v.OptionValues.Select(ov => $"{ov.OptionValue.ProductOption.DisplayName()}: {ov.OptionValue.Value}"))
                 : null,
             v.Price,
             v.SalePrice,
@@ -95,13 +102,14 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
             v.Stock is null || v.Stock > 0
         )).ToList();
 
-        var description = product.Description is { Length: > MaxDescriptionChars }
-            ? product.Description[..MaxDescriptionChars].TrimEnd() + "…"
-            : product.Description;
+        var fullDescription = product.DisplayDescription();
+        var description = fullDescription is { Length: > MaxDescriptionChars }
+            ? fullDescription[..MaxDescriptionChars].TrimEnd() + "…"
+            : fullDescription;
 
         return new ProductLookupResult(
             true, null,
-            product.Name, description, product.Slug,
+            product.DisplayName(), description, product.Slug,
             product.BasePrice, product.SalePrice,
             options, variants);
     }
@@ -147,12 +155,12 @@ public class AiAgentToolService(AppDbContext db, CartService cartService)
 
             foreach (var option in configuredOptions)
             {
-                if (!item.Options.TryGetValue(option.Name, out var desiredValue))
-                    return new DraftOrderResult(false, $"Missing a value for option '{option.Name}' on '{product.Name}'.");
+                if (!item.Options.TryGetValue(option.DisplayName(), out var desiredValue))
+                    return new DraftOrderResult(false, $"Missing a value for option '{option.DisplayName()}' on '{product.DisplayName()}'.");
 
                 var match = option.Values.FirstOrDefault(v => string.Equals(v.Value, desiredValue, StringComparison.OrdinalIgnoreCase));
                 if (match is null)
-                    return new DraftOrderResult(false, $"'{desiredValue}' isn't a valid value for '{option.Name}' on '{product.Name}'.");
+                    return new DraftOrderResult(false, $"'{desiredValue}' isn't a valid value for '{option.DisplayName()}' on '{product.DisplayName()}'.");
 
                 optionValueIds.Add(match.Id);
             }

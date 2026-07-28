@@ -230,7 +230,7 @@ public class CartService(
             var requiredStock = item.Quantity * bundleQuantity;
 
             if (availableStock < requiredStock)
-                throw new ArgumentException($"'{item.Product.Name}' doesn't have enough stock for this bundle quantity.");
+                throw new ArgumentException($"'{item.Product.DisplayName()}' doesn't have enough stock for this bundle quantity.");
         }
     }
 
@@ -353,7 +353,7 @@ public class CartService(
         order.Total = subtotal + shippingFee - discountAmount;
 
         var emailItems = cart.Items.Select(i => new OrderConfirmationEmailItem(
-            i.Variant.Product.Name,
+            i.Variant.Product.DisplayName(),
             i.Quantity,
             i.Variant.SalePrice ?? i.Variant.Price
         )).Concat(cart.BundleItems.Select(i => new OrderConfirmationEmailItem(
@@ -371,7 +371,7 @@ public class CartService(
         {
             if (cartItem.Variant.Stock is null) continue;
             if (cartItem.Variant.Stock.Value < cartItem.Quantity)
-                throw new ArgumentException($"'{cartItem.Variant.Product.Name}' doesn't have enough stock (only {cartItem.Variant.Stock} left).");
+                throw new ArgumentException($"'{cartItem.Variant.Product.DisplayName()}' doesn't have enough stock (only {cartItem.Variant.Stock} left).");
             cartItem.Variant.Stock -= cartItem.Quantity;
         }
 

@@ -6,6 +6,7 @@ using NipNip.Data;
 using NipNip.Data.Entities;
 using NipNip.Data.Enums;
 using NipNip.Modules.Storefronts.DTOs;
+using NipNip.Modules.Storefronts.Extensions;
 using NipNip.Modules.Tracking;
 using NipNip.Shared.Crypto;
 using NipNip.Shared.Email;
@@ -217,7 +218,7 @@ public class CityPayService(
         try
         {
             var emailItems = order.Items
-                .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.Name, i.Quantity, i.PriceAtPurchase))
+                .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.DisplayName(), i.Quantity, i.PriceAtPurchase))
                 .Concat(order.BundleItems.Select(i => new OrderConfirmationEmailItem(i.Bundle.Name, i.Quantity, i.PriceAtPurchase)))
                 .ToList();
 

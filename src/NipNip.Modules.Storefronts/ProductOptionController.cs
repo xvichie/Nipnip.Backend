@@ -17,6 +17,14 @@ public class ProductOptionController(ProductOptionService optionService) : Contr
         return Ok(await optionService.CreateOptionAsync(clerkUserId, productId, request));
     }
 
+    [HttpPut("{optionId:guid}")]
+    public async Task<ActionResult<ProductOptionResponse>> UpdateOption(
+        Guid productId, Guid optionId, [FromBody] UpdateProductOptionRequest request)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await optionService.UpdateOptionAsync(clerkUserId, productId, optionId, request));
+    }
+
     [HttpDelete("{optionId:guid}")]
     public async Task<IActionResult> DeleteOption(Guid productId, Guid optionId)
     {
@@ -31,6 +39,14 @@ public class ProductOptionController(ProductOptionService optionService) : Contr
     {
         var clerkUserId = User.GetClerkUserId();
         return Ok(await optionService.CreateValueAsync(clerkUserId, productId, optionId, request));
+    }
+
+    [HttpPut("{optionId:guid}/values/{valueId:guid}")]
+    public async Task<ActionResult<ProductOptionValueResponse>> UpdateValue(
+        Guid productId, Guid optionId, Guid valueId, [FromBody] UpdateProductOptionValueRequest request)
+    {
+        var clerkUserId = User.GetClerkUserId();
+        return Ok(await optionService.UpdateValueAsync(clerkUserId, productId, optionId, valueId, request));
     }
 
     [HttpDelete("{optionId:guid}/values/{valueId:guid}")]

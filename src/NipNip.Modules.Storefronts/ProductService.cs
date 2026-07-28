@@ -35,7 +35,13 @@ public class ProductService(AppDbContext db, StoreService storeService)
             .Where(p => p.StoreId == store.Id);
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        {
+            var pattern = $"%{search}%";
+            query = query.Where(p =>
+                EF.Functions.ILike(p.NameKa!, pattern) ||
+                EF.Functions.ILike(p.NameEn!, pattern) ||
+                EF.Functions.ILike(p.NameRu!, pattern));
+        }
 
         if (categoryId.HasValue)
             query = query.Where(p => p.CategoryId == categoryId.Value);
@@ -49,7 +55,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
         var descending = !string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
         query = sortBy?.ToLowerInvariant() switch
         {
-            "name" => descending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+            "name" => descending
+                ? query.OrderByDescending(p => p.NameKa ?? p.NameEn ?? p.NameRu ?? "")
+                : query.OrderBy(p => p.NameKa ?? p.NameEn ?? p.NameRu ?? ""),
             "price" => descending ? query.OrderByDescending(p => p.BasePrice) : query.OrderBy(p => p.BasePrice),
             _ => descending ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt),
         };
@@ -108,7 +116,13 @@ public class ProductService(AppDbContext db, StoreService storeService)
         }
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        {
+            var pattern = $"%{search}%";
+            query = query.Where(p =>
+                EF.Functions.ILike(p.NameKa!, pattern) ||
+                EF.Functions.ILike(p.NameEn!, pattern) ||
+                EF.Functions.ILike(p.NameRu!, pattern));
+        }
 
         if (minPrice.HasValue)
             query = query.Where(p => (p.SalePrice ?? p.BasePrice) >= minPrice.Value);
@@ -120,18 +134,22 @@ public class ProductService(AppDbContext db, StoreService storeService)
         // can define "ზომა: 42, 43" on a product without ever using the separate bulk-variant
         // generator, and filtering should still find those products. Each group (one per selected
         // option) is AND'd via the separate .Where calls; values within a group are OR'd via .Any().
+        // Matched against the option's canonical (ka->en->ru fallback) name, same identity used
+        // to group facets — Value itself (not its translations) is what filter query params carry.
         foreach (var group in ParseOptionFilters(optionFilters))
         {
             var name = group.Name;
             var values = group.Values;
             query = query.Where(p => p.Options.Any(o =>
-                o.Name == name && o.Values.Any(v => values.Contains(v.Value))));
+                (o.NameKa ?? o.NameEn ?? o.NameRu ?? "") == name && o.Values.Any(v => values.Contains(v.Value))));
         }
 
         var descending = !string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
         query = sortBy?.ToLowerInvariant() switch
         {
-            "name" => descending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+            "name" => descending
+                ? query.OrderByDescending(p => p.NameKa ?? p.NameEn ?? p.NameRu ?? "")
+                : query.OrderBy(p => p.NameKa ?? p.NameEn ?? p.NameRu ?? ""),
             "price" => descending
                 ? query.OrderByDescending(p => p.SalePrice ?? p.BasePrice)
                 : query.OrderBy(p => p.SalePrice ?? p.BasePrice),
@@ -184,23 +202,48 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
         var raw = await query
             .SelectMany(p => p.Options)
-            .SelectMany(o => o.Values, (o, v) => new { OptionName = o.Name, Value = v.Value })
+            .SelectMany(o => o.Values, (o, v) => new
+            {
+                o.NameKa, o.NameEn, o.NameRu,
+                Value = v.Value, v.ValueKa, v.ValueEn, v.ValueRu,
+            })
             .Distinct()
             .ToListAsync();
 
+        // Grouped by the option's canonical (ka->en->ru fallback) name — different ProductOption
+        // rows across different products with the same canonical name merge into one facet, even
+        // if their translation fields don't perfectly agree; the first non-null translation seen
+        // for each language wins for that facet's displayed name/value labels.
         return raw
-            .GroupBy(x => x.OptionName)
-            .Select(g => new ProductFacetResponse(g.Key, OrderFacetValues(g.Select(x => x.Value).Distinct().ToList())))
+            .GroupBy(x => x.NameKa ?? x.NameEn ?? x.NameRu ?? "")
+            .Select(g =>
+            {
+                var nameKa = g.Select(x => x.NameKa).FirstOrDefault(n => n is not null);
+                var nameEn = g.Select(x => x.NameEn).FirstOrDefault(n => n is not null);
+                var nameRu = g.Select(x => x.NameRu).FirstOrDefault(n => n is not null);
+
+                var values = g.GroupBy(x => x.Value)
+                    .Select(vg =>
+                    {
+                        var valueKa = vg.Select(x => x.ValueKa).FirstOrDefault(v => v is not null);
+                        var valueEn = vg.Select(x => x.ValueEn).FirstOrDefault(v => v is not null);
+                        var valueRu = vg.Select(x => x.ValueRu).FirstOrDefault(v => v is not null);
+                        return new ProductFacetValueResponse(vg.Key, valueKa, valueEn, valueRu);
+                    })
+                    .ToList();
+
+                return new ProductFacetResponse(g.Key, nameKa, nameEn, nameRu, OrderFacetValues(values));
+            })
             .ToList();
     }
 
     // Numeric-looking values (shoe/clothing sizes: "35", "36"...) sort numerically; everything
     // else (S/M/L/XL, colors) keeps first-seen order rather than alphabetizing, since alphabetical
     // would scramble "S, M, L, XL" into "L, M, S, XL".
-    private static List<string> OrderFacetValues(List<string> values)
+    private static List<ProductFacetValueResponse> OrderFacetValues(List<ProductFacetValueResponse> values)
     {
-        if (values.Count > 0 && values.All(v => decimal.TryParse(v, out _)))
-            return values.OrderBy(v => decimal.Parse(v)).ToList();
+        if (values.Count > 0 && values.All(v => decimal.TryParse(v.Value, out _)))
+            return values.OrderBy(v => decimal.Parse(v.Value)).ToList();
         return values;
     }
 
@@ -301,10 +344,21 @@ public class ProductService(AppDbContext db, StoreService storeService)
         return product.ToDetailDto();
     }
 
+    private static string? NormalizeText(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // At least one of the three must survive normalization — a product with no name in any
+    // language has nothing to display or slugify from. Mirrors CategoryService's rule exactly.
+    private static (string? Ka, string? En, string? Ru) NormalizeNames(string? nameKa, string? nameEn, string? nameRu)
+    {
+        var (ka, en, ru) = (NormalizeText(nameKa), NormalizeText(nameEn), NormalizeText(nameRu));
+        if (ka is null && en is null && ru is null)
+            throw new ArgumentException("At least one language name is required.");
+        return (ka, en, ru);
+    }
+
     public async Task<ProductDetailResponse> CreateAsync(string clerkUserId, CreateProductRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Name is required.");
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
 
         if (request.BasePrice < 0)
             throw new ArgumentException("Base price cannot be negative.");
@@ -323,9 +377,13 @@ public class ProductService(AppDbContext db, StoreService storeService)
             Id = Guid.NewGuid(),
             StoreId = store.Id,
             CategoryId = request.CategoryId,
-            Name = request.Name.Trim(),
-            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
-            Description = request.Description,
+            NameKa = nameKa,
+            NameEn = nameEn,
+            NameRu = nameRu,
+            Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!),
+            DescriptionKa = NormalizeText(request.DescriptionKa),
+            DescriptionEn = NormalizeText(request.DescriptionEn),
+            DescriptionRu = NormalizeText(request.DescriptionRu),
             VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim(),
             BasePrice = request.BasePrice,
             SalePrice = request.SalePrice,
@@ -346,14 +404,20 @@ public class ProductService(AppDbContext db, StoreService storeService)
     {
         var product = await GetOwnProductAsync(clerkUserId, id);
 
-        if (request.Name is not null)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("Name cannot be empty.");
-            product.Name = request.Name.Trim();
-        }
+        // Frontend always sends all three name/description fields on every save (never omits
+        // them), same convention as categories — unconditional overwrite, not a HasValue-gated
+        // partial update.
+        // Slug is intentionally NOT regenerated here — it's set once at creation and stays
+        // permanent thereafter (unlike categories), so existing product URLs never break just
+        // because a merchant edited a translation.
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
+        product.NameKa = nameKa;
+        product.NameEn = nameEn;
+        product.NameRu = nameRu;
 
-        if (request.Description is not null) product.Description = request.Description;
+        product.DescriptionKa = NormalizeText(request.DescriptionKa);
+        product.DescriptionEn = NormalizeText(request.DescriptionEn);
+        product.DescriptionRu = NormalizeText(request.DescriptionRu);
 
         if (request.VideoUrl is not null)
             product.VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim();
@@ -452,8 +516,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
     public async Task<ProductDetailResponse> CreateAdminAsync(Guid merchantId, CreateProductRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Name is required.");
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
 
         if (request.BasePrice < 0)
             throw new ArgumentException("Base price cannot be negative.");
@@ -472,9 +535,13 @@ public class ProductService(AppDbContext db, StoreService storeService)
             Id = Guid.NewGuid(),
             StoreId = store.Id,
             CategoryId = request.CategoryId,
-            Name = request.Name.Trim(),
-            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
-            Description = request.Description,
+            NameKa = nameKa,
+            NameEn = nameEn,
+            NameRu = nameRu,
+            Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!),
+            DescriptionKa = NormalizeText(request.DescriptionKa),
+            DescriptionEn = NormalizeText(request.DescriptionEn),
+            DescriptionRu = NormalizeText(request.DescriptionRu),
             VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim(),
             BasePrice = request.BasePrice,
             SalePrice = request.SalePrice,
@@ -501,14 +568,15 @@ public class ProductService(AppDbContext db, StoreService storeService)
             .FirstOrDefaultAsync(p => p.Id == id && p.StoreId == store.Id)
             ?? throw new NotFoundException("Product not found.");
 
-        if (request.Name is not null)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("Name cannot be empty.");
-            product.Name = request.Name.Trim();
-        }
+        // Slug is intentionally NOT regenerated here — see the self-service UpdateAsync comment.
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
+        product.NameKa = nameKa;
+        product.NameEn = nameEn;
+        product.NameRu = nameRu;
 
-        if (request.Description is not null) product.Description = request.Description;
+        product.DescriptionKa = NormalizeText(request.DescriptionKa);
+        product.DescriptionEn = NormalizeText(request.DescriptionEn);
+        product.DescriptionRu = NormalizeText(request.DescriptionRu);
 
         if (request.VideoUrl is not null)
             product.VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim();
@@ -571,9 +639,13 @@ public class ProductService(AppDbContext db, StoreService storeService)
             Id = Guid.NewGuid(),
             StoreId = original.StoreId,
             CategoryId = original.CategoryId,
-            Name = $"{original.Name} (Copy)",
-            Slug = await GenerateUniqueSlugAsync(original.StoreId, original.Name),
-            Description = original.Description,
+            NameKa = original.NameKa is not null ? $"{original.NameKa} (Copy)" : null,
+            NameEn = original.NameEn is not null ? $"{original.NameEn} (Copy)" : null,
+            NameRu = original.NameRu is not null ? $"{original.NameRu} (Copy)" : null,
+            Slug = await GenerateUniqueSlugAsync(original.StoreId, original.NameKa ?? original.NameEn ?? original.NameRu!),
+            DescriptionKa = original.DescriptionKa,
+            DescriptionEn = original.DescriptionEn,
+            DescriptionRu = original.DescriptionRu,
             VideoUrl = original.VideoUrl,
             BasePrice = original.BasePrice,
             SalePrice = original.SalePrice,
@@ -601,7 +673,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
             {
                 Id = Guid.NewGuid(),
                 ProductId = clone.Id,
-                Name = option.Name,
+                NameKa = option.NameKa,
+                NameEn = option.NameEn,
+                NameRu = option.NameRu,
             };
             db.ProductOptions.Add(newOption);
 
@@ -615,6 +689,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
                     Id = newValueId,
                     ProductOptionId = newOption.Id,
                     Value = value.Value,
+                    ValueKa = value.ValueKa,
+                    ValueEn = value.ValueEn,
+                    ValueRu = value.ValueRu,
                 });
             }
         }
@@ -667,6 +744,10 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
     private static readonly string[] ExportColumns = ["Name", "Slug", "CategoryName", "BasePrice", "SalePrice", "Description", "IsActive"];
 
+    // CSV export/import intentionally works with each product's single resolved (ka->en->ru
+    // fallback) Name/Description — the same "canonical fallback" treatment categories' CSV
+    // export uses via DisplayName(). Per-language translation editing is a UI-only affordance
+    // (the product form's language tabs); the CSV round-trip stays single-language.
     public async Task<string> ExportCsvAsync(string clerkUserId)
     {
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
@@ -674,21 +755,20 @@ public class ProductService(AppDbContext db, StoreService storeService)
         var products = await db.Products
             .Include(p => p.Category)
             .Where(p => p.StoreId == store.Id)
-            .OrderBy(p => p.Name)
             .ToListAsync();
 
         var sb = new StringBuilder();
         sb.AppendLine(CsvUtil.WriteRow(ExportColumns));
 
-        foreach (var p in products)
+        foreach (var p in products.OrderBy(p => p.DisplayName()))
         {
             sb.AppendLine(CsvUtil.WriteRow([
-                p.Name,
+                p.DisplayName(),
                 p.Slug,
                 p.Category?.DisplayName() ?? "",
                 p.BasePrice.ToString(CultureInfo.InvariantCulture),
                 p.SalePrice?.ToString(CultureInfo.InvariantCulture) ?? "",
-                p.Description ?? "",
+                p.DisplayDescription() ?? "",
                 p.IsActive.ToString(),
             ]));
         }
@@ -698,9 +778,11 @@ public class ProductService(AppDbContext db, StoreService storeService)
 
     /// <summary>
     /// Matches existing products by Slug when the row has one, otherwise by case-insensitive
-    /// Name — so a merchant can re-export, tweak prices in a spreadsheet, and re-import to
-    /// update in bulk, or add brand-new rows (blank Slug) to create products. Variants/images/
-    /// options stay UI-managed — this only covers the flat catalog fields.
+    /// resolved Name — so a merchant can re-export, tweak prices in a spreadsheet, and re-import
+    /// to update in bulk, or add brand-new rows (blank Slug) to create products. Variants/images/
+    /// options stay UI-managed — this only covers the flat catalog fields. The CSV's Name/
+    /// Description columns always write into the Ka slot only (single-language round-trip);
+    /// existing En/Ru translations, if any, are left untouched.
     /// </summary>
     public async Task<ProductImportResult> ImportCsvAsync(string clerkUserId, string csvContent)
     {
@@ -795,15 +877,15 @@ public class ProductService(AppDbContext db, StoreService storeService)
             var slug = Get(slugIdx);
             var existing = !string.IsNullOrWhiteSpace(slug)
                 ? existingProducts.FirstOrDefault(p => p.Slug == slug)
-                : existingProducts.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+                : existingProducts.FirstOrDefault(p => string.Equals(p.DisplayName(), name, StringComparison.OrdinalIgnoreCase));
 
             if (existing is not null)
             {
-                existing.Name = name;
+                existing.NameKa = name;
                 existing.BasePrice = basePrice;
                 existing.SalePrice = salePrice;
                 if (categoryId.HasValue || categoryShouldClear) existing.CategoryId = categoryId;
-                if (description is not null) existing.Description = string.IsNullOrWhiteSpace(description) ? null : description;
+                if (description is not null) existing.DescriptionKa = string.IsNullOrWhiteSpace(description) ? null : description;
                 existing.IsActive = isActive;
                 updated++;
                 results.Add(new ProductImportRowResult(rowNumber, name, "updated", null));
@@ -815,9 +897,9 @@ public class ProductService(AppDbContext db, StoreService storeService)
                     Id = Guid.NewGuid(),
                     StoreId = store.Id,
                     CategoryId = categoryId,
-                    Name = name,
+                    NameKa = name,
                     Slug = await GenerateUniqueSlugAsync(store.Id, name),
-                    Description = string.IsNullOrWhiteSpace(description) ? null : description,
+                    DescriptionKa = string.IsNullOrWhiteSpace(description) ? null : description,
                     BasePrice = basePrice,
                     SalePrice = salePrice,
                     IsActive = isActive,

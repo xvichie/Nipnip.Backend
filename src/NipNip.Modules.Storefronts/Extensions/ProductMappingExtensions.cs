@@ -5,6 +5,10 @@ namespace NipNip.Modules.Storefronts.Extensions;
 
 public static class ProductMappingExtensions
 {
+    public static string DisplayName(this Product product) => product.NameKa ?? product.NameEn ?? product.NameRu ?? "";
+
+    public static string? DisplayDescription(this Product product) => product.DescriptionKa ?? product.DescriptionEn ?? product.DescriptionRu;
+
     public static ProductSummaryResponse ToSummaryDto(this Product product)
     {
         var orderedImageUrls = product.Images.OrderBy(i => i.SortOrder).Select(i => i.Url).ToList();
@@ -13,7 +17,10 @@ public static class ProductMappingExtensions
             product.Id,
             product.Slug,
             product.CategoryId,
-            product.Name,
+            product.DisplayName(),
+            product.NameKa,
+            product.NameEn,
+            product.NameRu,
             product.BasePrice,
             product.SalePrice,
             product.IsActive,
@@ -32,8 +39,14 @@ public static class ProductMappingExtensions
             product.Id,
             product.Slug,
             product.CategoryId,
-            product.Name,
-            product.Description,
+            product.DisplayName(),
+            product.NameKa,
+            product.NameEn,
+            product.NameRu,
+            product.DisplayDescription(),
+            product.DescriptionKa,
+            product.DescriptionEn,
+            product.DescriptionRu,
             product.VideoUrl,
             product.BasePrice,
             product.SalePrice,

@@ -46,11 +46,11 @@ public static class OrderMappingExtensions
                 i.Id,
                 i.VariantId,
                 i.Variant.ProductId,
-                i.Variant.Product.Name,
+                i.Variant.Product.DisplayName(),
                 i.Variant.Sku,
                 i.Variant.Product.Images.OrderBy(img => img.SortOrder).FirstOrDefault()?.Url,
                 i.Variant.OptionValues
-                    .Select(ov => new CartItemOptionResponse(ov.OptionValue.ProductOption.Name, ov.OptionValue.Value))
+                    .Select(ov => new CartItemOptionResponse(ov.OptionValue.ProductOption.DisplayName(), ov.OptionValue.Value))
                     .ToList(),
                 i.Quantity,
                 i.PriceAtPurchase

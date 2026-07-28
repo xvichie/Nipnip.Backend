@@ -11,7 +11,6 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Id).ValueGeneratedOnAdd();
 
-        builder.Property(p => p.Name).IsRequired();
         builder.Property(p => p.Slug).IsRequired();
         builder.HasIndex(p => new { p.StoreId, p.Slug }).IsUnique();
         builder.Property(p => p.BasePrice).HasColumnType("decimal(18,2)");

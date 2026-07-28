@@ -10,7 +10,6 @@ public class ProductOptionConfiguration : IEntityTypeConfiguration<ProductOption
     {
         builder.HasKey(o => o.Id);
         builder.Property(o => o.Id).ValueGeneratedOnAdd();
-        builder.Property(o => o.Name).IsRequired();
 
         builder.HasMany(o => o.Values)
             .WithOne(v => v.ProductOption)

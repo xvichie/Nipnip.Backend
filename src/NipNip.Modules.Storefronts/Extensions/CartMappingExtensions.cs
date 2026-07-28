@@ -12,7 +12,7 @@ public static class CartMappingExtensions
             cart.Items.Select(i => new CartItemResponse(
                 i.Id,
                 i.VariantId,
-                i.Variant.Product.Name,
+                i.Variant.Product.DisplayName(),
                 i.Variant.Product.Slug,
                 i.Variant.Sku,
                 i.Variant.SalePrice ?? i.Variant.Price,
@@ -20,7 +20,7 @@ public static class CartMappingExtensions
                 i.Variant.Product.Images.OrderBy(img => img.SortOrder).FirstOrDefault()?.Url,
                 i.Variant.Stock,
                 i.Variant.OptionValues
-                    .Select(ov => new CartItemOptionResponse(ov.OptionValue.ProductOption.Name, ov.OptionValue.Value))
+                    .Select(ov => new CartItemOptionResponse(ov.OptionValue.ProductOption.DisplayName(), ov.OptionValue.Value))
                     .ToList()
             )).ToList(),
             cart.Items.Sum(i => (i.Variant.SalePrice ?? i.Variant.Price) * i.Quantity)

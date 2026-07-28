@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NipNip.Data;
 using NipNip.Data.Entities;
 using NipNip.Modules.Storefronts.DTOs;
+using NipNip.Modules.Storefronts.Extensions;
 using NipNip.Shared.Crypto;
 using NipNip.Shared.Exceptions;
 
@@ -105,7 +106,8 @@ public class TikTokConnectionService(
         var product = await productService.GetOwnProductAsync(clerkUserId, productId);
 
         var imageUrls = product.Images.OrderBy(i => i.SortOrder).Take(MaxPublishImages).Select(i => i.Url).ToList();
-        var title = product.Name.Length > 90 ? product.Name[..90] : product.Name;
+        var displayName = product.DisplayName();
+        var title = displayName.Length > 90 ? displayName[..90] : displayName;
 
         return new TikTokProductPreviewResponse(imageUrls, title, ProductPostMessageBuilder.Build(product, store));
     }
@@ -119,8 +121,9 @@ public class TikTokConnectionService(
         // Both fall back to the same defaults the preview endpoint shows, so the "automatic
         // sharing on create" flow (which has no preview step to seed a title/description from)
         // still gets a sensible post instead of requiring the merchant to type one first.
+        var displayName = product.DisplayName();
         var title = string.IsNullOrWhiteSpace(request.Title)
-            ? (product.Name.Length > 90 ? product.Name[..90] : product.Name)
+            ? (displayName.Length > 90 ? displayName[..90] : displayName)
             : request.Title.Trim();
         var description = string.IsNullOrWhiteSpace(request.Description)
             ? ProductPostMessageBuilder.Build(product, store)
