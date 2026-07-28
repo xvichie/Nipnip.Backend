@@ -56,7 +56,17 @@ public class OrderService(AppDbContext db, StoreService storeService)
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
         var order = await GetOwnOrderAsync(store.Id, id);
 
+        var wasCancelled = order.Status == OrderStatus.Cancelled;
         order.Status = status;
+
+        // Cancelling releases the stock this order was holding; un-cancelling (moving a
+        // Cancelled order back to an active status) re-reserves it, throwing if it's since been
+        // sold out from under this order.
+        if (status == OrderStatus.Cancelled && !wasCancelled)
+            OrderStockAdjuster.Release(order);
+        else if (wasCancelled && status != OrderStatus.Cancelled)
+            OrderStockAdjuster.Reserve(order);
+
         await db.SaveChangesAsync();
 
         return order.ToDetailDto();

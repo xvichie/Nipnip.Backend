@@ -11,6 +11,7 @@ using NipNip.Modules.Tracking;
 using NipNip.Shared.Crypto;
 using NipNip.Shared.Email;
 using NipNip.Shared.Exceptions;
+using NipNip.Modules.Storefronts;
 
 namespace NipNip.Modules.Storefronts.Tbc;
 
@@ -192,7 +193,11 @@ public class TbcService(
 
             case "Failed":
             case "Expired":
-                order.Status = OrderStatus.Cancelled;
+                if (order.Status != OrderStatus.Cancelled)
+                {
+                    order.Status = OrderStatus.Cancelled;
+                    OrderStockAdjuster.Release(order);
+                }
                 await db.SaveChangesAsync();
                 break;
 

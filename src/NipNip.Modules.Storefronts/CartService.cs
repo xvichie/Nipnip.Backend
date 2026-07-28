@@ -362,6 +362,19 @@ public class CartService(
             i.Bundle.BundlePrice
         ))).ToList();
 
+        // Reserving stock happens right here, at order placement, rather than waiting for
+        // payment/delivery — an order in any non-Cancelled status (including a still-Pending
+        // COD/bank-transfer order awaiting fulfillment) holds its stock so it can't be oversold.
+        // Cancelling the order (OrderStockAdjuster.Release, wired into OrderService and every
+        // payment gateway's decline/expire callback) is what returns it to availability.
+        foreach (var cartItem in cart.Items)
+        {
+            if (cartItem.Variant.Stock is null) continue;
+            if (cartItem.Variant.Stock.Value < cartItem.Quantity)
+                throw new ArgumentException($"'{cartItem.Variant.Product.Name}' doesn't have enough stock (only {cartItem.Variant.Stock} left).");
+            cartItem.Variant.Stock -= cartItem.Quantity;
+        }
+
         db.Orders.Add(order);
         db.OrderItems.AddRange(orderItems);
         db.OrderBundleItems.AddRange(orderBundleItems);
