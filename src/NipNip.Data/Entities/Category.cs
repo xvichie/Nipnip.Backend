@@ -5,7 +5,13 @@ public class Category
     public Guid Id { get; set; }
     public Guid StoreId { get; set; }
     public Guid? ParentCategoryId { get; set; }
-    public string Name { get; set; } = "";
+
+    // At least one of these three must be set (enforced in CategoryService, not a DB
+    // constraint) — a merchant can enter just one language and add the others later.
+    public string? NameKa { get; set; }
+    public string? NameEn { get; set; }
+    public string? NameRu { get; set; }
+
     public string Slug { get; set; } = "";
     public string? IconUrl { get; set; }
     public string? IconKey { get; set; }

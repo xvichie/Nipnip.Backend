@@ -16,10 +16,9 @@ public class CategoryService(AppDbContext db, StoreService storeService)
 
         var categories = await db.Categories
             .Where(c => c.StoreId == store.Id)
-            .OrderBy(c => c.Name)
             .ToListAsync();
 
-        return categories.Select(c => c.ToDto()).ToList();
+        return categories.Select(c => c.ToDto()).OrderBy(c => c.Name).ToList();
     }
 
     public async Task<List<CategoryResponse>> GetAllForStoreSlugAsync(string slug)
@@ -29,16 +28,14 @@ public class CategoryService(AppDbContext db, StoreService storeService)
 
         var categories = await db.Categories
             .Where(c => c.StoreId == store.Id)
-            .OrderBy(c => c.Name)
             .ToListAsync();
 
-        return categories.Select(c => c.ToDto()).ToList();
+        return categories.Select(c => c.ToDto()).OrderBy(c => c.Name).ToList();
     }
 
     public async Task<CategoryResponse> CreateAsync(string clerkUserId, CreateCategoryRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Name is required.");
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
 
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
 
@@ -53,8 +50,10 @@ public class CategoryService(AppDbContext db, StoreService storeService)
             Id = Guid.NewGuid(),
             StoreId = store.Id,
             ParentCategoryId = request.ParentCategoryId,
-            Name = request.Name.Trim(),
-            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
+            NameKa = nameKa,
+            NameEn = nameEn,
+            NameRu = nameRu,
+            Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!),
             IconUrl = NormalizeIcon(request.IconUrl),
             IconKey = NormalizeIcon(request.IconKey),
             IconEmoji = NormalizeIcon(request.IconEmoji),
@@ -68,6 +67,18 @@ public class CategoryService(AppDbContext db, StoreService storeService)
     }
 
     private static string? NormalizeIcon(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizeName(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // At least one of the three must survive normalization — a category with no name in any
+    // language has nothing to display or slugify from.
+    private static (string? Ka, string? En, string? Ru) NormalizeNames(string? nameKa, string? nameEn, string? nameRu)
+    {
+        var (ka, en, ru) = (NormalizeName(nameKa), NormalizeName(nameEn), NormalizeName(nameRu));
+        if (ka is null && en is null && ru is null)
+            throw new ArgumentException("At least one language name is required.");
+        return (ka, en, ru);
+    }
 
     private static void ValidateDefaultOptions(string? defaultOptions)
     {
@@ -104,13 +115,14 @@ public class CategoryService(AppDbContext db, StoreService storeService)
         var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id && c.StoreId == store.Id)
             ?? throw new NotFoundException("Category not found.");
 
-        if (request.Name is not null)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("Name cannot be empty.");
-            category.Name = request.Name.Trim();
-            category.Slug = await GenerateUniqueSlugAsync(store.Id, category.Name, category.Id);
-        }
+        // Frontend always sends all three name fields on every save (never omits them), same
+        // convention as the icon fields below — unconditional overwrite, not a HasValue-gated
+        // partial update.
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
+        category.NameKa = nameKa;
+        category.NameEn = nameEn;
+        category.NameRu = nameRu;
+        category.Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!, category.Id);
 
         if (request.ParentCategoryId.HasValue)
         {
@@ -167,16 +179,14 @@ public class CategoryService(AppDbContext db, StoreService storeService)
 
         var categories = await db.Categories
             .Where(c => c.StoreId == store.Id)
-            .OrderBy(c => c.Name)
             .ToListAsync();
 
-        return categories.Select(c => c.ToDto()).ToList();
+        return categories.Select(c => c.ToDto()).OrderBy(c => c.Name).ToList();
     }
 
     public async Task<CategoryResponse> CreateAdminAsync(Guid merchantId, CreateCategoryRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Name is required.");
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
 
         var store = await storeService.GetStoreForMerchantAsync(merchantId);
 
@@ -191,8 +201,10 @@ public class CategoryService(AppDbContext db, StoreService storeService)
             Id = Guid.NewGuid(),
             StoreId = store.Id,
             ParentCategoryId = request.ParentCategoryId,
-            Name = request.Name.Trim(),
-            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
+            NameKa = nameKa,
+            NameEn = nameEn,
+            NameRu = nameRu,
+            Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!),
             IconUrl = NormalizeIcon(request.IconUrl),
             IconKey = NormalizeIcon(request.IconKey),
             IconEmoji = NormalizeIcon(request.IconEmoji),
@@ -212,13 +224,11 @@ public class CategoryService(AppDbContext db, StoreService storeService)
         var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id && c.StoreId == store.Id)
             ?? throw new NotFoundException("Category not found.");
 
-        if (request.Name is not null)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("Name cannot be empty.");
-            category.Name = request.Name.Trim();
-            category.Slug = await GenerateUniqueSlugAsync(store.Id, category.Name, category.Id);
-        }
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
+        category.NameKa = nameKa;
+        category.NameEn = nameEn;
+        category.NameRu = nameRu;
+        category.Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!, category.Id);
 
         if (request.ParentCategoryId.HasValue)
         {

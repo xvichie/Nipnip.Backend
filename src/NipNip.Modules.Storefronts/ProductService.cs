@@ -685,7 +685,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
             sb.AppendLine(CsvUtil.WriteRow([
                 p.Name,
                 p.Slug,
-                p.Category?.Name ?? "",
+                p.Category?.DisplayName() ?? "",
                 p.BasePrice.ToString(CultureInfo.InvariantCulture),
                 p.SalePrice?.ToString(CultureInfo.InvariantCulture) ?? "",
                 p.Description ?? "",
@@ -779,7 +779,7 @@ public class ProductService(AppDbContext db, StoreService storeService)
                 }
                 else
                 {
-                    var match = categories.FirstOrDefault(c => string.Equals(c.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+                    var match = categories.FirstOrDefault(c => string.Equals(c.DisplayName(), categoryName, StringComparison.OrdinalIgnoreCase));
                     if (match is null)
                         results.Add(new ProductImportRowResult(rowNumber, name, "warning", $"Category '{categoryName}' not found — left unchanged."));
                     else
