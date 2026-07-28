@@ -5,6 +5,18 @@ namespace NipNip.Modules.Storefronts.Extensions;
 
 public static class CartMappingExtensions
 {
+    public static CartItemOptionResponse ToOptionDto(this ProductOptionValue optionValue) =>
+        new(
+            optionValue.ProductOption.DisplayName(),
+            optionValue.ProductOption.NameKa,
+            optionValue.ProductOption.NameEn,
+            optionValue.ProductOption.NameRu,
+            optionValue.Value,
+            optionValue.ValueKa,
+            optionValue.ValueEn,
+            optionValue.ValueRu
+        );
+
     public static CartResponse ToDto(this Cart cart) =>
         new(
             cart.Id,
@@ -13,22 +25,26 @@ public static class CartMappingExtensions
                 i.Id,
                 i.VariantId,
                 i.Variant.Product.DisplayName(),
+                i.Variant.Product.NameKa,
+                i.Variant.Product.NameEn,
+                i.Variant.Product.NameRu,
                 i.Variant.Product.Slug,
                 i.Variant.Sku,
                 i.Variant.SalePrice ?? i.Variant.Price,
                 i.Quantity,
                 i.Variant.Product.Images.OrderBy(img => img.SortOrder).FirstOrDefault()?.Url,
                 i.Variant.Stock,
-                i.Variant.OptionValues
-                    .Select(ov => new CartItemOptionResponse(ov.OptionValue.ProductOption.DisplayName(), ov.OptionValue.Value))
-                    .ToList()
+                i.Variant.OptionValues.Select(ov => ov.OptionValue.ToOptionDto()).ToList()
             )).ToList(),
             cart.Items.Sum(i => (i.Variant.SalePrice ?? i.Variant.Price) * i.Quantity)
                 + cart.BundleItems.Sum(i => i.Bundle.BundlePrice * i.Quantity),
             cart.BundleItems.Select(i => new CartBundleItemResponse(
                 i.Id,
                 i.BundleId,
-                i.Bundle.Name,
+                i.Bundle.DisplayName(),
+                i.Bundle.NameKa,
+                i.Bundle.NameEn,
+                i.Bundle.NameRu,
                 i.Bundle.Slug,
                 i.Bundle.ImageUrl,
                 i.Bundle.BundlePrice,

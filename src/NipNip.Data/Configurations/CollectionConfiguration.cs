@@ -11,7 +11,6 @@ public class CollectionConfiguration : IEntityTypeConfiguration<Collection>
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Id).ValueGeneratedOnAdd();
 
-        builder.Property(c => c.Name).IsRequired();
         builder.Property(c => c.Slug).IsRequired();
         builder.HasIndex(c => new { c.StoreId, c.Slug }).IsUnique();
     }

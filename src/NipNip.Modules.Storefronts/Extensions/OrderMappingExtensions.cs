@@ -49,16 +49,14 @@ public static class OrderMappingExtensions
                 i.Variant.Product.DisplayName(),
                 i.Variant.Sku,
                 i.Variant.Product.Images.OrderBy(img => img.SortOrder).FirstOrDefault()?.Url,
-                i.Variant.OptionValues
-                    .Select(ov => new CartItemOptionResponse(ov.OptionValue.ProductOption.DisplayName(), ov.OptionValue.Value))
-                    .ToList(),
+                i.Variant.OptionValues.Select(ov => ov.OptionValue.ToOptionDto()).ToList(),
                 i.Quantity,
                 i.PriceAtPurchase
             )).ToList(),
             order.BundleItems.Select(i => new OrderBundleItemResponse(
                 i.Id,
                 i.BundleId,
-                i.Bundle.Name,
+                i.Bundle.DisplayName(),
                 i.Quantity,
                 i.PriceAtPurchase
             )).ToList(),

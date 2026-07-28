@@ -2,7 +2,10 @@ namespace NipNip.Modules.Storefronts.DTOs;
 
 public record BundleItemResponse(
     Guid ProductId,
-    string ProductName,
+    string ProductName, // resolved ka -> en -> ru fallback
+    string? ProductNameKa,
+    string? ProductNameEn,
+    string? ProductNameRu,
     string ProductSlug,
     string? ImageUrl,
     decimal ProductPrice,
@@ -11,7 +14,11 @@ public record BundleItemResponse(
 
 public record ProductBundleResponse(
     Guid Id,
+    // Resolved ka -> en -> ru fallback — for consumers that just want "the" name.
     string Name,
+    string? NameKa,
+    string? NameEn,
+    string? NameRu,
     string Slug,
     decimal BundlePrice,
     string? ImageUrl,
@@ -24,14 +31,19 @@ public record ProductBundleResponse(
 public record BundleItemInput(Guid ProductId, int Quantity);
 
 public record CreateProductBundleRequest(
-    string Name,
+    // At least one of the three must be non-empty — enforced in ProductBundleService, not here.
+    string? NameKa,
+    string? NameEn,
+    string? NameRu,
     decimal BundlePrice,
     string? ImageUrl,
     List<BundleItemInput> Items
 );
 
 public record UpdateProductBundleRequest(
-    string? Name,
+    string? NameKa,
+    string? NameEn,
+    string? NameRu,
     decimal? BundlePrice,
     string? ImageUrl,
     bool? IsActive,

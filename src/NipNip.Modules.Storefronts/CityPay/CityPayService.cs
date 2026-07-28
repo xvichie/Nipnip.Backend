@@ -112,7 +112,7 @@ public class CityPayService(
     // CityPay's no-auth "get order" endpoint — the same notify-then-pull shape as Tbc/BogService,
     // chosen for the same reason (no way to cryptographically trust the callback payload).
 
-    private record CityPayMerchantData(string? SessionId, string? Ref);
+    private record CityPayMerchantData(string? SessionId, string? Ref, string? Lang = null);
 
     public async Task HandleCallbackAsync(string orderToken)
     {
@@ -183,6 +183,7 @@ public class CityPayService(
     private async Task FinalizeApprovedOrderAsync(Order order, Store store)
     {
         var merchantData = ParseMerchantData(order.CityPayMerchantData);
+        var lang = merchantData.Lang is "en" or "ru" ? merchantData.Lang : "ka";
 
         if (merchantData.SessionId is not null)
         {
@@ -218,8 +219,8 @@ public class CityPayService(
         try
         {
             var emailItems = order.Items
-                .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.DisplayName(), i.Quantity, i.PriceAtPurchase))
-                .Concat(order.BundleItems.Select(i => new OrderConfirmationEmailItem(i.Bundle.Name, i.Quantity, i.PriceAtPurchase)))
+                .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.DisplayName(lang), i.Quantity, i.PriceAtPurchase))
+                .Concat(order.BundleItems.Select(i => new OrderConfirmationEmailItem(i.Bundle.DisplayName(lang), i.Quantity, i.PriceAtPurchase)))
                 .ToList();
 
             await emailService.SendOrderConfirmationAsync(new OrderConfirmationEmailData(
@@ -233,7 +234,8 @@ public class CityPayService(
                 order.ShippingFee,
                 order.ShippingZoneName,
                 order.PaymentMethod.ToString(),
-                null
+                null,
+                lang
             ));
         }
         catch (Exception ex)

@@ -1,11 +1,23 @@
 namespace NipNip.Modules.Storefronts.DTOs;
 
-public record CartItemOptionResponse(string OptionName, string Value);
+public record CartItemOptionResponse(
+    string OptionName, // resolved ka -> en -> ru fallback
+    string? OptionNameKa,
+    string? OptionNameEn,
+    string? OptionNameRu,
+    string Value, // resolved ka -> en -> ru fallback
+    string? ValueKa,
+    string? ValueEn,
+    string? ValueRu
+);
 
 public record CartItemResponse(
     Guid Id,
     Guid VariantId,
-    string ProductName,
+    string ProductName, // resolved ka -> en -> ru fallback
+    string? ProductNameKa,
+    string? ProductNameEn,
+    string? ProductNameRu,
     string ProductSlug,
     string Sku,
     decimal Price,
@@ -18,7 +30,10 @@ public record CartItemResponse(
 public record CartBundleItemResponse(
     Guid Id,
     Guid BundleId,
-    string BundleName,
+    string BundleName, // resolved ka -> en -> ru fallback
+    string? BundleNameKa,
+    string? BundleNameEn,
+    string? BundleNameRu,
     string BundleSlug,
     string? ImageUrl,
     decimal BundlePrice,

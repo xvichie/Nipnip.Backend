@@ -283,6 +283,10 @@ public class CartService(
 
         var isHostedCheckout = paymentMethod is PaymentMethod.Flitt or PaymentMethod.Tbc or PaymentMethod.Bog or PaymentMethod.CityPay;
 
+        // Shopper's checkout-time language — resolves codNotes/bankTransferNotes/shippingZone
+        // name into the right variant, and (via ExtractShipping) freezes onto Order.ShippingZoneName.
+        var lang = request.Lang is "en" or "ru" ? request.Lang : "ka";
+
         var cart = await GetOrCreateCartAsync(slug, sessionId);
 
         if (cart.Items.Count == 0 && cart.BundleItems.Count == 0)
@@ -340,7 +344,7 @@ public class CartService(
             throw new ArgumentException($"Minimum order amount is {min:F2}.");
 
         var (shippingFee, shippingZoneName) = store is not null && !request.IsPickup
-            ? ExtractShipping(store.ThemeConfig, request.ShippingZoneId, subtotal)
+            ? ExtractShipping(store.ThemeConfig, request.ShippingZoneId, subtotal, lang)
             : (0m, null);
 
         var (discountAmount, appliedDiscountCode) = await discountCodeService.PreviewForCheckoutAsync(
@@ -353,11 +357,11 @@ public class CartService(
         order.Total = subtotal + shippingFee - discountAmount;
 
         var emailItems = cart.Items.Select(i => new OrderConfirmationEmailItem(
-            i.Variant.Product.DisplayName(),
+            i.Variant.Product.DisplayName(lang),
             i.Quantity,
             i.Variant.SalePrice ?? i.Variant.Price
         )).Concat(cart.BundleItems.Select(i => new OrderConfirmationEmailItem(
-            i.Bundle.Name,
+            i.Bundle.DisplayName(lang),
             i.Quantity,
             i.Bundle.BundlePrice
         ))).ToList();
@@ -401,28 +405,28 @@ public class CartService(
 
         if (paymentMethod == PaymentMethod.Flitt)
         {
-            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
+            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref, Lang = lang });
             var checkoutUrl = await flittService.CreateCheckoutSessionAsync(order, store!, merchantData);
             return order.ToDto() with { RedirectUrl = checkoutUrl };
         }
 
         if (paymentMethod == PaymentMethod.Tbc)
         {
-            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
+            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref, Lang = lang });
             var checkoutUrl = await tbcService.CreateCheckoutSessionAsync(order, store!, merchantData);
             return order.ToDto() with { RedirectUrl = checkoutUrl };
         }
 
         if (paymentMethod == PaymentMethod.Bog)
         {
-            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
+            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref, Lang = lang });
             var checkoutUrl = await bogService.CreateCheckoutSessionAsync(order, store!, merchantData);
             return order.ToDto() with { RedirectUrl = checkoutUrl };
         }
 
         if (paymentMethod == PaymentMethod.CityPay)
         {
-            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref });
+            var merchantData = JsonSerializer.Serialize(new { sessionId = cart.SessionId, request.Ref, Lang = lang });
             var checkoutUrl = await cityPayService.CreateCheckoutSessionAsync(order, store!, merchantData);
             return order.ToDto() with { RedirectUrl = checkoutUrl };
         }
@@ -455,7 +459,8 @@ public class CartService(
                     order.ShippingFee,
                     order.ShippingZoneName,
                     order.PaymentMethod.ToString(),
-                    ExtractPaymentNotes(store.ThemeConfig, order.PaymentMethod)
+                    ExtractPaymentNotes(store.ThemeConfig, order.PaymentMethod, lang),
+                    lang
                 ));
             }
             catch (Exception ex)
@@ -476,12 +481,25 @@ public class CartService(
         return order.ToDto();
     }
 
-    private static string? ExtractPaymentNotes(string themeConfigJson, PaymentMethod method)
+    private static string? ExtractPaymentNotes(string themeConfigJson, PaymentMethod method, string lang)
     {
         try
         {
             using var doc = JsonDocument.Parse(themeConfigJson);
             var key = method == PaymentMethod.BankTransfer ? "bankTransferNotes" : "codNotes";
+
+            // ThemeConfig's translations sidecar: translations.<lang>.<key> overrides the base
+            // value when present and non-empty, mirroring the frontend's resolveThemeText/getThemeText.
+            if (lang != "ka" &&
+                doc.RootElement.TryGetProperty("translations", out var translationsProp) &&
+                translationsProp.TryGetProperty(lang, out var langProp) &&
+                langProp.TryGetProperty(key, out var translatedProp) &&
+                translatedProp.ValueKind == JsonValueKind.String &&
+                translatedProp.GetString() is { Length: > 0 } translatedValue)
+            {
+                return translatedValue;
+            }
+
             if (doc.RootElement.TryGetProperty(key, out var prop) && prop.ValueKind == JsonValueKind.String)
             {
                 return prop.GetString() is { Length: > 0 } value ? value : null;
@@ -542,7 +560,7 @@ public class CartService(
         }
     }
 
-    private static (decimal Fee, string? ZoneName) ExtractShipping(string themeConfigJson, string? shippingZoneId, decimal subtotal)
+    private static (decimal Fee, string? ZoneName) ExtractShipping(string themeConfigJson, string? shippingZoneId, decimal subtotal, string lang)
     {
         try
         {
@@ -564,9 +582,23 @@ public class CartService(
             if (zone.ValueKind == JsonValueKind.Undefined)
                 throw new ArgumentException("Selected delivery area is not available.");
 
-            var name = zone.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String
+            var baseName = zone.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String
                 ? nameProp.GetString()
                 : null;
+
+            // Each zone carries its own translations sidecar (zone.translations.<lang>), a direct
+            // string per language — not nested under a field name like the top-level ThemeConfig
+            // sidecar, since a zone's only translatable content is its name.
+            string? name = baseName;
+            if (lang != "ka" &&
+                zone.TryGetProperty("translations", out var zoneTranslationsProp) &&
+                zoneTranslationsProp.TryGetProperty(lang, out var translatedNameProp) &&
+                translatedNameProp.ValueKind == JsonValueKind.String &&
+                translatedNameProp.GetString() is { Length: > 0 } translatedName)
+            {
+                name = translatedName;
+            }
+
             var price = zone.TryGetProperty("price", out var priceProp) && priceProp.TryGetDecimal(out var p) ? p : 0m;
 
             var freeThreshold = doc.RootElement.TryGetProperty("freeShippingThreshold", out var thresholdProp) && thresholdProp.ValueKind == JsonValueKind.Number

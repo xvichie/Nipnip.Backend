@@ -11,7 +11,6 @@ public class ProductBundleConfiguration : IEntityTypeConfiguration<ProductBundle
         builder.HasKey(b => b.Id);
         builder.Property(b => b.Id).ValueGeneratedOnAdd();
 
-        builder.Property(b => b.Name).IsRequired();
         builder.Property(b => b.Slug).IsRequired();
         builder.HasIndex(b => new { b.StoreId, b.Slug }).IsUnique();
 

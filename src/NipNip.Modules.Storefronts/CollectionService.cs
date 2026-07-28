@@ -15,10 +15,9 @@ public class CollectionService(AppDbContext db, StoreService storeService)
 
         var collections = await db.Collections
             .Where(c => c.StoreId == store.Id)
-            .OrderBy(c => c.Name)
             .ToListAsync();
 
-        return collections.Select(c => c.ToDto()).ToList();
+        return collections.Select(c => c.ToDto()).OrderBy(c => c.Name).ToList();
     }
 
     public async Task<List<CollectionResponse>> GetAllForStoreSlugAsync(string slug)
@@ -28,16 +27,26 @@ public class CollectionService(AppDbContext db, StoreService storeService)
 
         var collections = await db.Collections
             .Where(c => c.StoreId == store.Id)
-            .OrderBy(c => c.Name)
             .ToListAsync();
 
-        return collections.Select(c => c.ToDto()).ToList();
+        return collections.Select(c => c.ToDto()).OrderBy(c => c.Name).ToList();
+    }
+
+    private static string? NormalizeName(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // At least one of the three must survive normalization — a collection with no name in any
+    // language has nothing to display or slugify from.
+    private static (string? Ka, string? En, string? Ru) NormalizeNames(string? nameKa, string? nameEn, string? nameRu)
+    {
+        var (ka, en, ru) = (NormalizeName(nameKa), NormalizeName(nameEn), NormalizeName(nameRu));
+        if (ka is null && en is null && ru is null)
+            throw new ArgumentException("At least one language name is required.");
+        return (ka, en, ru);
     }
 
     public async Task<CollectionResponse> CreateAsync(string clerkUserId, CreateCollectionRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Name is required.");
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
 
         var store = await storeService.GetOwnStoreAsync(clerkUserId);
 
@@ -45,8 +54,10 @@ public class CollectionService(AppDbContext db, StoreService storeService)
         {
             Id = Guid.NewGuid(),
             StoreId = store.Id,
-            Name = request.Name.Trim(),
-            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
+            NameKa = nameKa,
+            NameEn = nameEn,
+            NameRu = nameRu,
+            Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!),
         };
 
         db.Collections.Add(collection);
@@ -62,13 +73,14 @@ public class CollectionService(AppDbContext db, StoreService storeService)
         var collection = await db.Collections.FirstOrDefaultAsync(c => c.Id == id && c.StoreId == store.Id)
             ?? throw new NotFoundException("Collection not found.");
 
-        if (request.Name is not null)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("Name cannot be empty.");
-            collection.Name = request.Name.Trim();
-            collection.Slug = await GenerateUniqueSlugAsync(store.Id, collection.Name, collection.Id);
-        }
+        // Frontend always sends all three name fields on every save (never omits them), same
+        // convention as categories/products — unconditional overwrite, not a HasValue-gated
+        // partial update.
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
+        collection.NameKa = nameKa;
+        collection.NameEn = nameEn;
+        collection.NameRu = nameRu;
+        collection.Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!, collection.Id);
 
         await db.SaveChangesAsync();
         return collection.ToDto();

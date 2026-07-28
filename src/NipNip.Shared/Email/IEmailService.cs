@@ -35,5 +35,7 @@ public record OrderConfirmationEmailData(
     decimal ShippingFee,
     string? ShippingZoneName,
     string PaymentMethod,
-    string? PaymentNotes
+    string? PaymentNotes,
+    /// <summary>Shopper's checkout-time language ("ka"/"en"/"ru") — the whole email is rendered in this language.</summary>
+    string Lang = "ka"
 );

@@ -7,11 +7,69 @@ namespace NipNip.Api.Email;
 
 public class SmtpEmailService(IConfiguration config) : IEmailService
 {
-    private static readonly Dictionary<string, string> PaymentMethodLabels = new()
+    // Order confirmation email chrome — the whole email renders in the shopper's checkout-time
+    // language (OrderConfirmationEmailData.Lang), unlike the merchant/creator sale-notification
+    // email (BuildConversionHtml) which stays Georgian since it's an internal ops notification,
+    // not shopper-facing.
+    private record OrderEmailStrings(
+        string Subject,
+        string Heading,
+        string ThankYou,
+        string Total,
+        string PaymentMethodRow,
+        string Shipping,
+        string ShippingWithZone,
+        string Free,
+        string BackToStore,
+        string Footer,
+        Dictionary<string, string> PaymentMethodLabels
+    );
+
+    private static readonly Dictionary<string, OrderEmailStrings> OrderEmailStringsByLang = new()
     {
-        ["CashOnDelivery"] = "გადახდა მიტანისას",
-        ["BankTransfer"] = "საბანკო გადარიცხვა",
+        ["ka"] = new OrderEmailStrings(
+            Subject: "შეკვეთა მიღებულია — {0}",
+            Heading: "შეკვეთა მიღებულია!",
+            ThankYou: "გმადლობთ, {0}. თქვენი შეკვეთა {1}-ში მიღებულია.",
+            Total: "სულ",
+            PaymentMethodRow: "გადახდის მეთოდი",
+            Shipping: "მიწოდება",
+            ShippingWithZone: "მიწოდება ({0})",
+            Free: "უფასო",
+            BackToStore: "მაღაზიაში დაბრუნება →",
+            Footer: "ეს შეტყობინება გაიგზავნა ავტომატურად",
+            PaymentMethodLabels: new() { ["CashOnDelivery"] = "გადახდა მიტანისას", ["BankTransfer"] = "საბანკო გადარიცხვა" }
+        ),
+        ["en"] = new OrderEmailStrings(
+            Subject: "Order confirmed — {0}",
+            Heading: "Order confirmed!",
+            ThankYou: "Thank you, {0}. Your order at {1} has been received.",
+            Total: "Total",
+            PaymentMethodRow: "Payment method",
+            Shipping: "Delivery",
+            ShippingWithZone: "Delivery ({0})",
+            Free: "Free",
+            BackToStore: "Back to store →",
+            Footer: "This message was sent automatically",
+            PaymentMethodLabels: new() { ["CashOnDelivery"] = "Cash on delivery", ["BankTransfer"] = "Bank transfer" }
+        ),
+        ["ru"] = new OrderEmailStrings(
+            Subject: "Заказ получен — {0}",
+            Heading: "Заказ получен!",
+            ThankYou: "Спасибо, {0}. Ваш заказ в {1} получен.",
+            Total: "Итого",
+            PaymentMethodRow: "Способ оплаты",
+            Shipping: "Доставка",
+            ShippingWithZone: "Доставка ({0})",
+            Free: "Бесплатно",
+            BackToStore: "Вернуться в магазин →",
+            Footer: "Это сообщение отправлено автоматически",
+            PaymentMethodLabels: new() { ["CashOnDelivery"] = "Оплата при получении", ["BankTransfer"] = "Банковский перевод" }
+        ),
     };
+
+    private static OrderEmailStrings GetOrderEmailStrings(string lang) =>
+        OrderEmailStringsByLang.TryGetValue(lang, out var strings) ? strings : OrderEmailStringsByLang["ka"];
 
     public async Task SendConversionNotificationAsync(ConversionEmailData data)
     {
@@ -28,7 +86,8 @@ public class SmtpEmailService(IConfiguration config) : IEmailService
         if (settings is null) return;
 
         var html = BuildOrderConfirmationHtml(data, settings.AppUrl);
-        await SendAsync(settings, data.ToEmail, $"შეკვეთა მიღებულია — {data.StoreName}", html);
+        var subject = string.Format(GetOrderEmailStrings(data.Lang).Subject, data.StoreName);
+        await SendAsync(settings, data.ToEmail, subject, html);
     }
 
     private SmtpSettings? GetSettings()
@@ -121,18 +180,19 @@ public class SmtpEmailService(IConfiguration config) : IEmailService
 
     private static string BuildOrderConfirmationHtml(OrderConfirmationEmailData d, string appUrl)
     {
+        var s = GetOrderEmailStrings(d.Lang);
         var storeUrl = $"{appUrl}/store/{d.StoreSlug}";
-        var paymentLabel = PaymentMethodLabels.GetValueOrDefault(d.PaymentMethod, d.PaymentMethod);
+        var paymentLabel = s.PaymentMethodLabels.GetValueOrDefault(d.PaymentMethod, d.PaymentMethod);
 
         var itemRows = string.Join("", d.Items.Select(i => Row(
             $"{i.ProductName} ×{i.Quantity}",
             $"{(i.Price * i.Quantity):F2} ₾"
         )));
 
-        var shippingLabel = d.ShippingZoneName is { Length: > 0 } zoneName ? $"მიწოდება ({zoneName})" : "მიწოდება";
+        var shippingLabel = d.ShippingZoneName is { Length: > 0 } zoneName ? string.Format(s.ShippingWithZone, zoneName) : s.Shipping;
         var shippingRow = d.ShippingZoneName is null && d.ShippingFee == 0
             ? ""
-            : Row(shippingLabel, d.ShippingFee == 0 ? "უფასო" : $"{d.ShippingFee:F2} ₾");
+            : Row(shippingLabel, d.ShippingFee == 0 ? s.Free : $"{d.ShippingFee:F2} ₾");
 
         var notesBlock = string.IsNullOrWhiteSpace(d.PaymentNotes) ? "" : $"""
             <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:12px;padding:16px;margin-bottom:24px;">
@@ -140,6 +200,8 @@ public class SmtpEmailService(IConfiguration config) : IEmailService
               <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.75);line-height:1.6;white-space:pre-line;">{d.PaymentNotes}</p>
             </div>
             """;
+
+        var thankYou = string.Format(s.ThankYou, d.CustomerName, $"<strong style=\"color:rgba(255,255,255,0.8);\">{d.StoreName}</strong>");
 
         return $"""
             <!DOCTYPE html>
@@ -155,28 +217,28 @@ public class SmtpEmailService(IConfiguration config) : IEmailService
                 <div style="background:#18181f;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:32px;">
 
                   <div style="font-size:32px;margin-bottom:10px;">✅</div>
-                  <h2 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#ffffff;">შეკვეთა მიღებულია!</h2>
+                  <h2 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#ffffff;">{s.Heading}</h2>
                   <p style="margin:0 0 28px;font-size:14px;color:rgba(255,255,255,0.45);line-height:1.6;">
-                    გმადლობთ, {d.CustomerName}. თქვენი შეკვეთა <strong style="color:rgba(255,255,255,0.8);">{d.StoreName}</strong>-ში მიღებულია.
+                    {thankYou}
                   </p>
 
                   <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;margin-bottom:16px;">
                     {itemRows}
                     {shippingRow}
-                    {Row("სულ", $"<span style=\"color:#a855f7;font-weight:700;\">{d.Total:F2} ₾</span>")}
-                    {Row("გადახდის მეთოდი", paymentLabel)}
+                    {Row(s.Total, $"<span style=\"color:#a855f7;font-weight:700;\">{d.Total:F2} ₾</span>")}
+                    {Row(s.PaymentMethodRow, paymentLabel)}
                   </div>
 
                   {notesBlock}
 
                   <a href="{storeUrl}" style="display:block;text-align:center;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#ffffff;font-weight:700;font-size:14px;padding:14px 24px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
-                    მაღაზიაში დაბრუნება →
+                    {s.BackToStore}
                   </a>
 
                 </div>
 
                 <p style="text-align:center;font-size:12px;color:rgba(255,255,255,0.2);margin-top:20px;padding-bottom:40px;">
-                  © {DateTime.UtcNow.Year} NipNip · ეს შეტყობინება გაიგზავნა ავტომატურად
+                  © {DateTime.UtcNow.Year} NipNip · {s.Footer}
                 </p>
               </div>
             </body>

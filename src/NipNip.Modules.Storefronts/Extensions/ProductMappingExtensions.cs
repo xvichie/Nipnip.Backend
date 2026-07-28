@@ -7,6 +7,15 @@ public static class ProductMappingExtensions
 {
     public static string DisplayName(this Product product) => product.NameKa ?? product.NameEn ?? product.NameRu ?? "";
 
+    // Same ka-priority fallback as DisplayName(), but lets "en"/"ru" pick their own translation
+    // first (when set) — mirrors the frontend's getProductName(product, lang).
+    public static string DisplayName(this Product product, string lang) => lang switch
+    {
+        "en" when !string.IsNullOrEmpty(product.NameEn) => product.NameEn,
+        "ru" when !string.IsNullOrEmpty(product.NameRu) => product.NameRu,
+        _ => product.DisplayName(),
+    };
+
     public static string? DisplayDescription(this Product product) => product.DescriptionKa ?? product.DescriptionEn ?? product.DescriptionRu;
 
     public static ProductSummaryResponse ToSummaryDto(this Product product)

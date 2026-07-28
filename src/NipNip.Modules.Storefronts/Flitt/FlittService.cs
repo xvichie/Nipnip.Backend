@@ -127,7 +127,7 @@ public class FlittService(
 
     // --- Callback handling (server_callback_url, verified + idempotent) ---
 
-    private record FlittMerchantData(string? SessionId, string? Ref);
+    private record FlittMerchantData(string? SessionId, string? Ref, string? Lang = null);
 
     public async Task HandleCallbackAsync(JsonNode payload)
     {
@@ -208,6 +208,7 @@ public class FlittService(
     private async Task FinalizeApprovedOrderAsync(Order order, Store store, string? merchantDataRaw)
     {
         var merchantData = ParseMerchantData(merchantDataRaw);
+        var lang = merchantData.Lang is "en" or "ru" ? merchantData.Lang : "ka";
 
         if (merchantData.SessionId is not null)
         {
@@ -243,8 +244,8 @@ public class FlittService(
         try
         {
             var emailItems = order.Items
-                .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.DisplayName(), i.Quantity, i.PriceAtPurchase))
-                .Concat(order.BundleItems.Select(i => new OrderConfirmationEmailItem(i.Bundle.Name, i.Quantity, i.PriceAtPurchase)))
+                .Select(i => new OrderConfirmationEmailItem(i.Variant.Product.DisplayName(lang), i.Quantity, i.PriceAtPurchase))
+                .Concat(order.BundleItems.Select(i => new OrderConfirmationEmailItem(i.Bundle.DisplayName(lang), i.Quantity, i.PriceAtPurchase)))
                 .ToList();
 
             await emailService.SendOrderConfirmationAsync(new OrderConfirmationEmailData(
@@ -258,7 +259,8 @@ public class FlittService(
                 order.ShippingFee,
                 order.ShippingZoneName,
                 order.PaymentMethod.ToString(),
-                ExtractFlittNotes(store.ThemeConfig)
+                ExtractFlittNotes(store.ThemeConfig),
+                lang
             ));
         }
         catch (Exception ex)

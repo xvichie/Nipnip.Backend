@@ -46,10 +46,21 @@ public class ProductBundleService(AppDbContext db, StoreService storeService)
         return bundle.ToDto();
     }
 
+    private static string? NormalizeName(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // At least one of the three must survive normalization — a bundle with no name in any
+    // language has nothing to display or slugify from.
+    private static (string? Ka, string? En, string? Ru) NormalizeNames(string? nameKa, string? nameEn, string? nameRu)
+    {
+        var (ka, en, ru) = (NormalizeName(nameKa), NormalizeName(nameEn), NormalizeName(nameRu));
+        if (ka is null && en is null && ru is null)
+            throw new ArgumentException("At least one language name is required.");
+        return (ka, en, ru);
+    }
+
     public async Task<ProductBundleResponse> CreateAsync(string clerkUserId, CreateProductBundleRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Name is required.");
+        var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
 
         if (request.BundlePrice <= 0)
             throw new ArgumentException("Bundle price must be greater than zero.");
@@ -64,8 +75,10 @@ public class ProductBundleService(AppDbContext db, StoreService storeService)
         {
             Id = Guid.NewGuid(),
             StoreId = store.Id,
-            Name = request.Name.Trim(),
-            Slug = await GenerateUniqueSlugAsync(store.Id, request.Name),
+            NameKa = nameKa,
+            NameEn = nameEn,
+            NameRu = nameRu,
+            Slug = await GenerateUniqueSlugAsync(store.Id, nameKa ?? nameEn ?? nameRu!),
             BundlePrice = request.BundlePrice,
             ImageUrl = string.IsNullOrWhiteSpace(request.ImageUrl) ? null : request.ImageUrl.Trim(),
             IsActive = true,
@@ -90,11 +103,15 @@ public class ProductBundleService(AppDbContext db, StoreService storeService)
         var bundle = await BundlesWithIncludes().FirstOrDefaultAsync(b => b.Id == id && b.StoreId == store.Id)
             ?? throw new NotFoundException("Bundle not found.");
 
-        if (request.Name is not null)
+        // Unlike categories/products/collections, the frontend also sends name-less partial
+        // updates here (e.g. just toggling IsActive) — so only touch the name at all when the
+        // request actually carries at least one of the three fields.
+        if (request.NameKa is not null || request.NameEn is not null || request.NameRu is not null)
         {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("Name cannot be empty.");
-            bundle.Name = request.Name.Trim();
+            var (nameKa, nameEn, nameRu) = NormalizeNames(request.NameKa, request.NameEn, request.NameRu);
+            bundle.NameKa = nameKa;
+            bundle.NameEn = nameEn;
+            bundle.NameRu = nameRu;
         }
 
         if (request.BundlePrice.HasValue)

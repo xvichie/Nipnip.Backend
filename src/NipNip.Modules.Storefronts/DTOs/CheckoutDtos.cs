@@ -12,7 +12,9 @@ public record CheckoutRequest(
     string? Ref,
     string? CustomerNote = null,
     string? DiscountCode = null,
-    bool IsPickup = false
+    bool IsPickup = false,
+    /// <summary>Shopper's checkout-time language ("ka"/"en"/"ru"); resolves codNotes/bankTransferNotes/shippingZone name and freezes onto Order.ShippingZoneName. Defaults to "ka".</summary>
+    string? Lang = null
 );
 
 public record OrderResponse(
