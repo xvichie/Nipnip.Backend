@@ -61,13 +61,18 @@ public class OrderService(AppDbContext db, StoreService storeService)
 
         // Cancelling releases the stock this order was holding; un-cancelling (moving a
         // Cancelled order back to an active status) re-reserves it, throwing if it's since been
-        // sold out from under this order.
+        // sold out from under this order. Wrapped in a transaction alongside the status save so a
+        // failed Reserve (partway through a multi-item order) can't leave a partial stock change
+        // committed while the status update rolls back.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
         if (status == OrderStatus.Cancelled && !wasCancelled)
-            OrderStockAdjuster.Release(order);
+            await OrderStockAdjuster.ReleaseAsync(db, order);
         else if (wasCancelled && status != OrderStatus.Cancelled)
-            OrderStockAdjuster.Reserve(order);
+            await OrderStockAdjuster.ReserveAsync(db, order);
 
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         return order.ToDetailDto();
     }
@@ -167,5 +172,6 @@ public class OrderService(AppDbContext db, StoreService storeService)
             .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product).ThenInclude(p => p.Images)
             .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.OptionValues).ThenInclude(ov => ov.OptionValue).ThenInclude(pov => pov.ProductOption)
             .Include(o => o.BundleItems).ThenInclude(i => i.Bundle)
+            .Include(o => o.BundleItems).ThenInclude(i => i.StockAllocations)
             .Include(o => o.Notes);
 }

@@ -161,6 +161,7 @@ public class FlittService(
         var order = await db.Orders
             .Include(o => o.Items).ThenInclude(i => i.Variant).ThenInclude(v => v.Product)
             .Include(o => o.BundleItems).ThenInclude(i => i.Bundle)
+            .Include(o => o.BundleItems).ThenInclude(i => i.StockAllocations)
             .FirstOrDefaultAsync(o => o.Id == orderId && o.StoreId == store.Id);
         if (order is null)
         {
@@ -194,9 +195,15 @@ public class FlittService(
                 if (order.Status != OrderStatus.Cancelled)
                 {
                     order.Status = OrderStatus.Cancelled;
-                    OrderStockAdjuster.Release(order);
+                    await using var releaseTransaction = await db.Database.BeginTransactionAsync();
+                    await OrderStockAdjuster.ReleaseAsync(db, order);
+                    await db.SaveChangesAsync();
+                    await releaseTransaction.CommitAsync();
                 }
-                await db.SaveChangesAsync();
+                else
+                {
+                    await db.SaveChangesAsync();
+                }
                 break;
 
             default:

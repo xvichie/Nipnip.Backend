@@ -234,6 +234,59 @@ public class CartService(
         }
     }
 
+    /// <summary>
+    /// Atomically decrements stock for one bundle line item at checkout, splitting the required
+    /// quantity across the product's variants (largest-stock-first) when it has more than one,
+    /// and returns an allocation record per variant actually drawn from — the exact breakdown
+    /// OrderStockAdjuster needs to release/reserve this bundle item precisely later. Mirrors
+    /// EnsureBundleStockAvailable's "any variant with unlimited stock makes the whole product
+    /// unlimited" rule: skips decrementing entirely in that case, since there's no single variant
+    /// to attribute the decrement to.
+    /// </summary>
+    private async Task<List<OrderBundleItemVariantAllocation>> DecrementBundleStockAsync(
+        ProductBundle bundleDefinition, int bundleQuantity, Guid orderBundleItemId)
+    {
+        var allocations = new List<OrderBundleItemVariantAllocation>();
+
+        foreach (var item in bundleDefinition.Items)
+        {
+            var variants = item.Product.Variants;
+            if (variants.Count == 0) continue;
+            if (variants.Any(v => v.Stock is null)) continue;
+
+            var remaining = item.Quantity * bundleQuantity;
+
+            foreach (var variant in variants.OrderByDescending(v => v.Stock))
+            {
+                if (remaining <= 0) break;
+
+                var take = Math.Min(remaining, variant.Stock ?? 0);
+                if (take <= 0) continue;
+
+                var rows = await db.ProductVariants
+                    .Where(v => v.Id == variant.Id && v.Stock >= take)
+                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.Stock, v => v.Stock - take));
+
+                if (rows == 0)
+                    throw new ArgumentException($"'{item.Product.DisplayName()}' doesn't have enough stock for this bundle quantity.");
+
+                allocations.Add(new OrderBundleItemVariantAllocation
+                {
+                    Id = Guid.NewGuid(),
+                    OrderBundleItemId = orderBundleItemId,
+                    VariantId = variant.Id,
+                    Quantity = take,
+                });
+                remaining -= take;
+            }
+
+            if (remaining > 0)
+                throw new ArgumentException($"'{item.Product.DisplayName()}' doesn't have enough stock for this bundle quantity.");
+        }
+
+        return allocations;
+    }
+
     public async Task<CartResponse> UpdateBundleItemAsync(string slug, string? sessionId, Guid itemId, UpdateCartBundleItemRequest request)
     {
         if (request.Quantity <= 0)
@@ -371,17 +424,57 @@ public class CartService(
         // COD/bank-transfer order awaiting fulfillment) holds its stock so it can't be oversold.
         // Cancelling the order (OrderStockAdjuster.Release, wired into OrderService and every
         // payment gateway's decline/expire callback) is what returns it to availability.
+        //
+        // Everything below runs inside one DB transaction: each stock adjustment is an atomic
+        // conditional UPDATE (WHERE Stock >= quantity), not a read-then-write on the tracked
+        // entity, so two concurrent checkouts racing for the last unit of a variant can't both
+        // pass the check and oversell it — the second one's conditional UPDATE simply matches
+        // zero rows and fails loudly. Wrapping it all in a transaction means a failure partway
+        // through (e.g. the 2nd item in a multi-item cart is out of stock) rolls back every
+        // decrement already applied for this checkout, not just the order/order-items insert.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
         foreach (var cartItem in cart.Items)
         {
             if (cartItem.Variant.Stock is null) continue;
-            if (cartItem.Variant.Stock.Value < cartItem.Quantity)
-                throw new ArgumentException($"'{cartItem.Variant.Product.DisplayName()}' doesn't have enough stock (only {cartItem.Variant.Stock} left).");
-            cartItem.Variant.Stock -= cartItem.Quantity;
+
+            var rows = await db.ProductVariants
+                .Where(v => v.Id == cartItem.VariantId && v.Stock >= cartItem.Quantity)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.Stock, v => v.Stock - cartItem.Quantity));
+
+            if (rows == 0)
+            {
+                var currentStock = await db.ProductVariants.Where(v => v.Id == cartItem.VariantId).Select(v => v.Stock).FirstAsync();
+                throw new ArgumentException($"'{cartItem.Variant.Product.DisplayName()}' doesn't have enough stock (only {currentStock} left).");
+            }
+        }
+
+        // Bundles pin a Product, not a single variant (no option selection at add-to-cart time),
+        // so a bundle component's required quantity may need to be split across more than one of
+        // that product's variants. Each split is recorded as an OrderBundleItemVariantAllocation
+        // so cancelling/un-cancelling this order later can replay the exact same breakdown instead
+        // of re-deriving one against stock levels that may have moved on since.
+        var bundleStockAllocations = new List<OrderBundleItemVariantAllocation>();
+        if (cart.BundleItems.Count > 0)
+        {
+            var bundleIds = cart.BundleItems.Select(i => i.BundleId).Distinct().ToList();
+            var bundleDefinitions = await db.ProductBundles
+                .Include(b => b.Items).ThenInclude(i => i.Product).ThenInclude(p => p.Variants)
+                .Where(b => bundleIds.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id);
+
+            foreach (var (cartBundleItem, orderBundleItem) in cart.BundleItems.Zip(orderBundleItems))
+            {
+                var bundleDefinition = bundleDefinitions[cartBundleItem.BundleId];
+                bundleStockAllocations.AddRange(
+                    await DecrementBundleStockAsync(bundleDefinition, cartBundleItem.Quantity, orderBundleItem.Id));
+            }
         }
 
         db.Orders.Add(order);
         db.OrderItems.AddRange(orderItems);
         db.OrderBundleItems.AddRange(orderBundleItems);
+        db.OrderBundleItemVariantAllocations.AddRange(bundleStockAllocations);
 
         // Flitt/TBC/BOG/CityPay orders aren't "placed" yet — the customer still has to complete
         // a hosted payment. The cart, confirmation email, affiliate conversion, and discount-code
@@ -396,6 +489,7 @@ public class CartService(
         }
 
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         if (!isHostedCheckout && appliedDiscountCode is not null)
         {

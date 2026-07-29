@@ -10,4 +10,5 @@ public class OrderBundleItem
 
     public Order Order { get; set; } = null!;
     public ProductBundle Bundle { get; set; } = null!;
+    public ICollection<OrderBundleItemVariantAllocation> StockAllocations { get; set; } = [];
 }
