@@ -5,6 +5,8 @@ public record MerchantResponse(
     string Name,
     string Slug,
     string? LogoUrl,
+    string? LogoBackgroundColor,
+    string? LogoBackgroundImageUrl,
     string? WebsiteUrl,
     string? InstagramHandle,
     string? Description,

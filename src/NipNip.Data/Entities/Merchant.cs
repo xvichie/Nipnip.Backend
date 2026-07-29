@@ -7,6 +7,15 @@ public class Merchant
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string? LogoUrl { get; set; }
+
+    // Backdrop shown behind LogoUrl wherever the logo is displayed publicly (e.g. the /websites
+    // showcase) — useful since many uploaded logos are transparent PNGs that need a solid or
+    // branded backing to read well on a dark card. At most one is ever set at a time; the
+    // frontend infers which mode is active from whichever is non-null rather than needing a
+    // separate discriminator column.
+    public string? LogoBackgroundColor { get; set; }
+    public string? LogoBackgroundImageUrl { get; set; }
+
     public string? WebsiteUrl { get; set; }
     public string? InstagramHandle { get; set; }
     public string? Description { get; set; }

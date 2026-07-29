@@ -132,6 +132,11 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         if (request.InstagramHandle is not null) merchant.InstagramHandle = request.InstagramHandle;
         if (request.Description is not null) merchant.Description = request.Description;
         if (request.LogoUrl is not null) merchant.LogoUrl = request.LogoUrl;
+        // Admin-only, deliberately not mirrored in the merchant self-service UpdateAsync below —
+        // this cosmetic backdrop is for the admin-curated /websites showcase, not something a
+        // merchant should be able to set on their own via the shared request DTO.
+        if (request.LogoBackgroundColor is not null) merchant.LogoBackgroundColor = request.LogoBackgroundColor.Length > 0 ? request.LogoBackgroundColor : null;
+        if (request.LogoBackgroundImageUrl is not null) merchant.LogoBackgroundImageUrl = request.LogoBackgroundImageUrl.Length > 0 ? request.LogoBackgroundImageUrl : null;
         if (request.NotificationEmail is not null) merchant.NotificationEmail = request.NotificationEmail;
         if (request.IsPublic.HasValue) merchant.IsPublic = request.IsPublic.Value;
 

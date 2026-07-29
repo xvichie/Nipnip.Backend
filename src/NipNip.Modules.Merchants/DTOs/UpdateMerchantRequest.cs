@@ -8,5 +8,9 @@ public record UpdateMerchantRequest(
     string? LogoUrl,
     decimal? CommissionPercent,
     string? NotificationEmail,
-    bool? IsPublic
+    bool? IsPublic,
+    /// <summary>Pass an empty string to clear it — a request property left null means "don't change".</summary>
+    string? LogoBackgroundColor = null,
+    /// <summary>Pass an empty string to clear it — a request property left null means "don't change".</summary>
+    string? LogoBackgroundImageUrl = null
 );

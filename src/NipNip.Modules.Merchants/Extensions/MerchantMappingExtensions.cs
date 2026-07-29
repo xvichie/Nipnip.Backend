@@ -16,6 +16,8 @@ public static class MerchantMappingExtensions
             merchant.Name,
             merchant.Slug,
             merchant.LogoUrl,
+            merchant.LogoBackgroundColor,
+            merchant.LogoBackgroundImageUrl,
             merchant.WebsiteUrl,
             merchant.InstagramHandle,
             merchant.Description,
