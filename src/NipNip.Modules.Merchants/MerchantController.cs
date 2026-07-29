@@ -26,6 +26,13 @@ public class MerchantController(MerchantService merchantService) : ControllerBas
         return Ok(await merchantService.GetHighlightedAsync(User.TryGetClerkUserId()));
     }
 
+    [HttpGet("featured-stores")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<MerchantResponse>>> GetFeaturedStores()
+    {
+        return Ok(await merchantService.GetFeaturedStoresAsync());
+    }
+
     [HttpGet("me")]
     public async Task<ActionResult<MerchantResponse>> GetMe()
     {

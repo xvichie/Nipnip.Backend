@@ -255,6 +255,27 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         return merchants.Select(m => m.ToDto(m.IsPublic || approvedIds.Contains(m.Id))).ToList();
     }
 
+    // Public landing-page showcase of real stores built on NipNip — deliberately independent of
+    // IsHighlighted/AffiliateEnabled (that's the creator-discovery carousel's concern, not this
+    // one) and of viewer identity, since this is a fully anonymous endpoint with nothing to
+    // approve a viewer for.
+    public async Task<List<MerchantResponse>> GetFeaturedStoresAsync()
+    {
+        var rows = await (
+            from m in db.Merchants
+            join s in db.Stores on m.Id equals s.MerchantId
+            where m.IsActive && m.IsFeaturedStore && !m.IsProspect && !m.IsTest
+            orderby m.Name
+            select new { Merchant = m, Store = s }
+        ).ToListAsync();
+
+        return rows
+            .Select(r => r.Merchant.ToDto(
+                storeSlug: r.Store.Slug,
+                storeCustomDomain: r.Store.CustomDomainVerifiedAt.HasValue ? r.Store.CustomDomain : null))
+            .ToList();
+    }
+
     public async Task<MerchantResponse> ToggleTestAsync(Guid id)
     {
         var merchant = await db.Merchants.FindAsync(id)
@@ -362,6 +383,15 @@ public class MerchantService(AppDbContext db, IConfiguration configuration)
         var merchant = await db.Merchants.FindAsync(id)
             ?? throw new NotFoundException("Merchant not found.");
         merchant.IsHighlighted = !merchant.IsHighlighted;
+        await db.SaveChangesAsync();
+        return merchant.ToDto();
+    }
+
+    public async Task<MerchantResponse> ToggleFeatureStoreAsync(Guid id)
+    {
+        var merchant = await db.Merchants.FindAsync(id)
+            ?? throw new NotFoundException("Merchant not found.");
+        merchant.IsFeaturedStore = !merchant.IsFeaturedStore;
         await db.SaveChangesAsync();
         return merchant.ToDto();
     }

@@ -16,6 +16,11 @@ public class Merchant
     public string? NotificationEmail { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsHighlighted { get; set; } = false;
+
+    // Shows this merchant's real storefront on the public landing page's website showcase,
+    // independent of affiliate-program participation — deliberately separate from IsHighlighted,
+    // which only surfaces merchants with AffiliateEnabled stores for the creator-facing carousel.
+    public bool IsFeaturedStore { get; set; } = false;
     public bool IsTest { get; set; } = false;
     public bool IsPublic { get; set; } = true;
 

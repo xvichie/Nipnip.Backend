@@ -14,13 +14,18 @@ public record MerchantResponse(
     string? NotificationEmail,
     bool IsActive,
     bool IsHighlighted,
+    bool IsFeaturedStore,
     bool IsTest,
     bool IsPublic,
     bool IsProspect,
     bool IsApprovedForViewer,
     DateTimeOffset CreatedAt,
     /// <summary>When their Store was created — null if they haven't set one up yet. Only populated by the admin listing.</summary>
-    DateTimeOffset? StoreCreatedAt = null
+    DateTimeOffset? StoreCreatedAt = null,
+    /// <summary>The Store's own slug (independent of Merchant.Slug) — only populated by the featured-stores query, for building a link to the live storefront.</summary>
+    string? StoreSlug = null,
+    /// <summary>Only populated (by the featured-stores query) once the domain is verified — never point at an unverified one.</summary>
+    string? StoreCustomDomain = null
 );
 
 public record MerchantAccessRequestResponse(

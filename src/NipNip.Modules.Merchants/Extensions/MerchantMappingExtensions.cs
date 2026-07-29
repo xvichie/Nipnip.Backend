@@ -5,7 +5,12 @@ namespace NipNip.Modules.Merchants.Extensions;
 
 public static class MerchantMappingExtensions
 {
-    public static MerchantResponse ToDto(this Merchant merchant, bool isApprovedForViewer = true, DateTimeOffset? storeCreatedAt = null) =>
+    public static MerchantResponse ToDto(
+        this Merchant merchant,
+        bool isApprovedForViewer = true,
+        DateTimeOffset? storeCreatedAt = null,
+        string? storeSlug = null,
+        string? storeCustomDomain = null) =>
         new(
             merchant.Id,
             merchant.Name,
@@ -20,11 +25,14 @@ public static class MerchantMappingExtensions
             merchant.NotificationEmail,
             merchant.IsActive,
             merchant.IsHighlighted,
+            merchant.IsFeaturedStore,
             merchant.IsTest,
             merchant.IsPublic,
             merchant.IsProspect,
             isApprovedForViewer,
             merchant.CreatedAt,
-            storeCreatedAt
+            storeCreatedAt,
+            storeSlug,
+            storeCustomDomain
         );
 }

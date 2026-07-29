@@ -172,6 +172,12 @@ public class AdminController(
         return Ok(await merchantService.ToggleHighlightAsync(id));
     }
 
+    [HttpPut("merchants/{id:guid}/feature-store")]
+    public async Task<ActionResult<MerchantResponse>> ToggleMerchantFeatureStore(Guid id)
+    {
+        return Ok(await merchantService.ToggleFeatureStoreAsync(id));
+    }
+
     [HttpPut("merchants/{id:guid}/test-flag")]
     public async Task<ActionResult<MerchantResponse>> ToggleMerchantTest(Guid id)
     {
