@@ -59,12 +59,20 @@ public class StoreAnalyticsService(AppDbContext db, StoreService storeService)
         var productViews = await views.CountAsync(v => v.Path.StartsWith("/products/") && !v.Path.StartsWith("/products/category/"));
         var orders = await db.Orders.CountAsync(o => o.StoreId == store.Id && o.CreatedAt >= since && o.Status != OrderStatus.Cancelled);
 
-        var topPages = await views
+        // GroupBy().Select(g => new TopPageEntry(...)).OrderByDescending(p => p.Views) can't be
+        // translated to SQL — EF Core can't map the record's Views property in the ORDER BY back
+        // to the aggregate Count() that produced it. Materializing the group counts as an
+        // anonymous type first (which EF *can* translate) and building the record + sorting +
+        // limiting on the client avoids the crash. See `sources` below, which already did this.
+        var topPagesRaw = await views
             .GroupBy(v => v.Path)
-            .Select(g => new TopPageEntry(g.Key, g.Count()))
+            .Select(g => new { Path = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var topPages = topPagesRaw
+            .Select(g => new TopPageEntry(g.Path, g.Count))
             .OrderByDescending(p => p.Views)
             .Take(TopPagesLimit)
-            .ToListAsync();
+            .ToList();
 
         var referrerCounts = await views
             .GroupBy(v => v.ReferrerHost)
